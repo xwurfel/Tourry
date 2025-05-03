@@ -23,7 +23,7 @@ import com.google.maps.android.compose.MapType
 import com.google.maps.android.compose.MapsComposeExperimentalApi
 import com.google.maps.android.compose.clustering.Clustering
 import com.google.maps.android.compose.rememberCameraPositionState
-import com.xwurfel.tourry.navigation.Destinations
+import com.xwurfel.tourry.presentation.navigation.Destinations
 import com.xwurfel.tourry.presentation.common.ErrorScreenContent
 import com.xwurfel.tourry.presentation.common.LoadingScreenContent
 import com.xwurfel.tourry.presentation.home.model.PoiClusterItem
