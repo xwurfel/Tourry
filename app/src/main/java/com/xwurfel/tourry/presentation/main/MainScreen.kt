@@ -25,9 +25,11 @@ import com.xwurfel.tourry.presentation.navigation.Destinations
 import com.xwurfel.tourry.presentation.poi_details.PoiDetailsScreenRoute
 import com.xwurfel.tourry.presentation.profile.ProfileScreenRoute
 import com.xwurfel.tourry.presentation.save_poi.PoiSettingsScreenRoute
+import com.xwurfel.tourry.presentation.tour.checkin.TourCheckInScreenRoute
 import com.xwurfel.tourry.presentation.tour.details.TourDetailsScreenRoute
 import com.xwurfel.tourry.presentation.tour.edit.EditTourScreenRoute
 import com.xwurfel.tourry.presentation.tour.list.TourListScreenRoute
+import com.xwurfel.tourry.presentation.tour.route.RouteEditorScreenRoute
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -48,7 +50,7 @@ fun MainScreen() {
     }
 
     LaunchedEffect(uiState.isAuthenticated) {
-        if (!uiState.isAuthenticated && currentRoute != "Login" && currentRoute != "Register") {
+        if (!uiState.isAuthenticated && currentRoute != "com.xwurfel.tourry.presentation.navigation.Destinations.Login" && currentRoute != "com.xwurfel.tourry.presentation.navigation.Destinations.Register") {
             navController.navigate(Destinations.Login) {
                 popUpTo(navController.graph.id) {
                     inclusive = true
@@ -57,11 +59,12 @@ fun MainScreen() {
         }
     }
 
+    // TODO: remove hardcoded strings from code
     val currentDestination: Destinations = try {
         when (currentRoute) {
-            "TourList" -> Destinations.TourList
-            "MyBookings" -> Destinations.MyBookings
-            "Profile" -> Destinations.Profile
+            "com.xwurfel.tourry.presentation.navigation.Destinations.TourList" -> Destinations.TourList
+            "com.xwurfel.tourry.presentation.navigation.Destinations.MyBookings" -> Destinations.MyBookings
+            "com.xwurfel.tourry.presentation.navigation.Destinations.Profile" -> Destinations.Profile
             else -> Destinations.TourList
         }
     } catch (_: Exception) {
@@ -144,7 +147,14 @@ fun MainScreen() {
                     },
                     onBookNowClicked = { id ->
                         navController.navigate(Destinations.BookTour(id))
-                    })
+                    },
+                    onEditRouteClicked = { id ->
+                        navController.navigate(Destinations.TourRouteEditor(id))
+                    },
+                    onCheckInClicked = { id ->
+                        navController.navigate(Destinations.TourCheckIn(id))
+                    }
+                )
             }
 
             composable<Destinations.BookTour> {
@@ -167,6 +177,7 @@ fun MainScreen() {
                         }
                     }
                 }, onNavigateToMyTours = {
+                    // TODO: implement
                     // Navigate to My Tours screen (for guides)
                     // This is a placeholder for now
                 }, onNavigateToMyBookings = {
@@ -208,6 +219,29 @@ fun MainScreen() {
                 val tourId = it.toRoute<Destinations.EditTour>().tourId
                 EditTourScreenRoute(
                     tourId = tourId, onNavigateBack = navController::navigateUp
+                )
+            }
+
+            composable<Destinations.EditTour> {
+                val tourId = it.toRoute<Destinations.EditTour>().tourId
+                EditTourScreenRoute(
+                    tourId = tourId, onNavigateBack = navController::navigateUp
+                )
+            }
+
+            composable<Destinations.TourRouteEditor> {
+                val tourId = it.toRoute<Destinations.TourRouteEditor>().tourId
+                RouteEditorScreenRoute(
+                    tourId = tourId,
+                    onNavigateBack = navController::navigateUp
+                )
+            }
+
+            composable<Destinations.TourCheckIn> {
+                val tourId = it.toRoute<Destinations.TourCheckIn>().tourId
+                TourCheckInScreenRoute(
+                    tourId = tourId,
+                    onNavigateBack = navController::navigateUp
                 )
             }
         }

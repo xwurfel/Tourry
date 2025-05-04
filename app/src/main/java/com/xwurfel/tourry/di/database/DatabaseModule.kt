@@ -3,9 +3,12 @@ package com.xwurfel.tourry.di.database
 import android.content.Context
 import androidx.room.Room
 import com.xwurfel.tourry.core.AppDatabase
+import com.xwurfel.tourry.core.migration.MIGRATION_2_3
 import com.xwurfel.tourry.data.booking.dao.BookingDao
 import com.xwurfel.tourry.data.category.dao.TourCategoryDao
+import com.xwurfel.tourry.data.checkin.dao.CheckInDao
 import com.xwurfel.tourry.data.poi.dao.PoiDao
+import com.xwurfel.tourry.data.route.dao.RoutePointDao
 import com.xwurfel.tourry.data.tour.dao.TourDao
 import com.xwurfel.tourry.data.user.dao.UserDao
 import dagger.Module
@@ -27,6 +30,7 @@ object DatabaseModule {
             AppDatabase::class.java,
             "app_database"
         )
+            .addMigrations(MIGRATION_2_3)
             .fallbackToDestructiveMigration(false) // For development only, consider proper migrations in production
             .build()
     }
@@ -54,5 +58,15 @@ object DatabaseModule {
     @Provides
     fun provideTourCategoryDao(database: AppDatabase): TourCategoryDao {
         return database.tourCategoryDao()
+    }
+
+    @Provides
+    fun provideRoutePointDao(database: AppDatabase): RoutePointDao {
+        return database.routePointDao()
+    }
+
+    @Provides
+    fun provideCheckInDao(database: AppDatabase): CheckInDao {
+        return database.checkInDao()
     }
 }

@@ -26,6 +26,12 @@ sealed interface Destinations {
     data class BookTour(val tourId: Long) : Destinations
 
     @Serializable
+    data class TourRouteEditor(val tourId: Long) : Destinations
+
+    @Serializable
+    data class TourCheckIn(val tourId: Long) : Destinations
+
+    @Serializable
     data object MyBookings : Destinations
 
     @Serializable

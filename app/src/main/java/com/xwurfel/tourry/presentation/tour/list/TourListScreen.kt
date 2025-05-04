@@ -99,7 +99,7 @@ fun TourListScreen(
     onTourClicked: (Long) -> Unit,
     onCreateTourClicked: () -> Unit,
     onSearchQueryChanged: (String) -> Unit,
-    onCategorySelected: (Long?) -> Unit,
+    onCategorySelected: (Long) -> Unit,
     onFilterTypeChanged: (TourFilterType) -> Unit
 ) {
     Scaffold(topBar = {
@@ -134,7 +134,6 @@ fun TourListScreen(
                 singleLine = true
             )
 
-            // Filter Tabs
             TabRow(
                 selectedTabIndex = uiState.filterType.ordinal, modifier = Modifier.fillMaxWidth()
             ) {
@@ -147,21 +146,22 @@ fun TourListScreen(
             }
 
             LazyRow {
-                items(uiState.allCategories) { category ->
+                items(uiState.allCategories, key = { it.id }) { category ->
                     FilterChip(
-                        selected = uiState.selectedCategoryId == category.id,
+                        selected = uiState.selectedCategoryIds.contains(category.id),
                         onClick = { onCategorySelected(category.id) },
                         label = { Text(category.name) },
                         leadingIcon = {
                             AsyncImage(
-                                model = category.iconName,
+                                model = category.icon,
                                 contentDescription = category.name,
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier
                                     .size(24.dp)
                                     .clip(CircleShape)
                             )
-                        }
+                        },
+                        modifier = Modifier.padding(horizontal = 8.dp)
                     )
                 }
             }

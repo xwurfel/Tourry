@@ -8,7 +8,8 @@ fun TourCategoryEntity.toDomain(): TourCategory {
         id = id,
         name = name,
         description = description,
-        iconName = iconName
+        iconName = iconName,
+        icon = icon
     )
 }
 
@@ -17,6 +18,7 @@ fun TourCategory.toEntity(): TourCategoryEntity {
         id = id,
         name = name,
         description = description,
-        iconName = iconName
+        iconName = iconName,
+        icon = icon
     )
 }

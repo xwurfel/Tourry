@@ -4,9 +4,13 @@ import com.xwurfel.tourry.data.booking.dao.BookingDao
 import com.xwurfel.tourry.data.booking.repository.BookingRepositoryImpl
 import com.xwurfel.tourry.data.category.dao.TourCategoryDao
 import com.xwurfel.tourry.data.category.repository.TourCategoryRepositoryImpl
+import com.xwurfel.tourry.data.checkin.dao.CheckInDao
+import com.xwurfel.tourry.data.checkin.repository.CheckInRepositoryImpl
 import com.xwurfel.tourry.data.poi.dao.PoiDao
 import com.xwurfel.tourry.data.poi.repository.PoiRepositoryImpl
 import com.xwurfel.tourry.data.poi.source.PoiDataSource
+import com.xwurfel.tourry.data.route.dao.RoutePointDao
+import com.xwurfel.tourry.data.route.repository.RouteRepositoryImpl
 import com.xwurfel.tourry.data.tour.dao.TourDao
 import com.xwurfel.tourry.data.tour.repository.TourRepositoryImpl
 import com.xwurfel.tourry.data.user.dao.UserDao
@@ -14,6 +18,8 @@ import com.xwurfel.tourry.data.user.repository.UserRepositoryImpl
 import com.xwurfel.tourry.domain.booking.repository.BookingRepository
 import com.xwurfel.tourry.domain.category.repository.TourCategoryRepository
 import com.xwurfel.tourry.domain.poi.repository.PoiRepository
+import com.xwurfel.tourry.domain.route.repository.RouteRepository
+import com.xwurfel.tourry.domain.tour.repository.CheckInRepository
 import com.xwurfel.tourry.domain.tour.repository.TourRepository
 import com.xwurfel.tourry.domain.user.repository.UserRepository
 import dagger.Module
@@ -59,5 +65,17 @@ object RepositoryModule {
     @Provides
     fun provideTourCategoryRepository(tourCategoryDao: TourCategoryDao): TourCategoryRepository {
         return TourCategoryRepositoryImpl(tourCategoryDao)
+    }
+
+    @Singleton
+    @Provides
+    fun provideRouteRepository(routePointDao: RoutePointDao): RouteRepository {
+        return RouteRepositoryImpl(routePointDao)
+    }
+
+    @Singleton
+    @Provides
+    fun provideCheckInRepository(checkInDao: CheckInDao): CheckInRepository {
+        return CheckInRepositoryImpl(checkInDao)
     }
 }

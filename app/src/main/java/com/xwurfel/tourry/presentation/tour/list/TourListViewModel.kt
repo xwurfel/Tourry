@@ -26,7 +26,7 @@ data class TourListUiState(
     val allTours: List<Tour> = emptyList(),
     val filteredTours: List<Tour> = emptyList(),
     val searchQuery: String = "",
-    val selectedCategoryId: Long? = null,
+    val selectedCategoryIds: Set<Long> = emptySet(),
     val filterType: TourFilterType = TourFilterType.ALL,
     val allCategories: List<TourCategory> = emptyList()
 )
@@ -48,7 +48,10 @@ class TourListViewModel @Inject constructor(
                     _uiState.update { state ->
                         state.copy(
                             isLoading = false, allTours = tours, filteredTours = applyFilters(
-                                tours, state.searchQuery, state.selectedCategoryId, state.filterType
+                                tours,
+                                state.searchQuery,
+                                state.selectedCategoryIds,
+                                state.filterType
                             )
                         )
                     }
@@ -81,39 +84,49 @@ class TourListViewModel @Inject constructor(
         _uiState.update { state ->
             state.copy(
                 searchQuery = query, filteredTours = applyFilters(
-                    state.allTours, query, state.selectedCategoryId, state.filterType
+                    state.allTours, query, state.selectedCategoryIds, state.filterType
                 )
             )
         }
     }
 
-    fun onCategorySelected(categoryId: Long?) {
+    fun onCategorySelected(categoryId: Long) {
         _uiState.update { state ->
+            val updatedCategoryIds = if (state.selectedCategoryIds.contains(categoryId)) {
+                state.selectedCategoryIds - categoryId
+            } else {
+                state.selectedCategoryIds + categoryId
+            }
+
             state.copy(
-                selectedCategoryId = categoryId, filteredTours = applyFilters(
-                    state.allTours, state.searchQuery, categoryId, state.filterType
+                selectedCategoryIds = updatedCategoryIds,
+                filteredTours = applyFilters(
+                    state.allTours, state.searchQuery, updatedCategoryIds, state.filterType
                 )
             )
         }
     }
+
 
     fun onFilterTypeChanged(filterType: TourFilterType) {
         _uiState.update { state ->
             state.copy(
                 filterType = filterType, filteredTours = applyFilters(
-                    state.allTours, state.searchQuery, state.selectedCategoryId, filterType
+                    state.allTours, state.searchQuery, state.selectedCategoryIds, filterType
                 )
             )
         }
     }
 
     private fun applyFilters(
-        tours: List<Tour>, searchQuery: String, categoryId: Long?, filterType: TourFilterType
+        tours: List<Tour>, searchQuery: String, categoryIds: Set<Long>, filterType: TourFilterType
     ): List<Tour> {
-        var filteredTours = if (categoryId != null) {
-            tours.filter { it.categoryId == categoryId }
-        } else {
-            tours
+        var filteredTours = tours
+
+        if (categoryIds.isNotEmpty()) {
+            filteredTours = filteredTours.filter { tour ->
+                tour.categoryId in categoryIds
+            }
         }
 
         if (searchQuery.isNotEmpty()) {

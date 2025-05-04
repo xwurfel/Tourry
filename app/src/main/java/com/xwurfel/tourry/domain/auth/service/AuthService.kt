@@ -1,5 +1,6 @@
 package com.xwurfel.tourry.domain.auth.service
 
+import android.net.Uri
 import com.xwurfel.tourry.domain.auth.model.AuthState
 import com.xwurfel.tourry.domain.user.model.User
 import com.xwurfel.tourry.domain.user.model.UserRole
@@ -20,13 +21,9 @@ class AuthService @Inject constructor(
     val authState: StateFlow<AuthState> = _authState.asStateFlow()
 
     suspend fun registerUser(
-        email: String,
-        password: String,
-        name: String,
-        role: UserRole = UserRole.TOURIST
+        email: String, password: String, name: String, role: UserRole = UserRole.TOURIST
     ): Result<User> {
         return try {
-            // Check if the user already exists
             val existingUser = userRepository.getUserByEmail(email).first()
             if (existingUser != null) {
                 Result.failure(IllegalArgumentException("User with this email already exists"))
@@ -52,8 +49,9 @@ class AuthService @Inject constructor(
 
     suspend fun login(email: String, password: String): Result<User> {
         return try {
-            val user = userRepository.authenticateUser(email, password)
-                ?: return Result.failure(IllegalArgumentException("Invalid credentials"))
+            val user = userRepository.authenticateUser(email, password) ?: return Result.failure(
+                IllegalArgumentException("Invalid credentials")
+            )
 
             _authState.value = AuthState(isAuthenticated = true, currentUser = user)
             Result.success(user)
@@ -81,21 +79,25 @@ class AuthService @Inject constructor(
         name: String? = null,
         bio: String? = null,
         phoneNumber: String? = null,
-        newPassword: String? = null
+        newPassword: String? = null,
+        profileImageUri: Uri? = null
     ): Result<User> {
         return try {
-            val currentUser = userRepository.getUserById(userId).first()
-                ?: return Result.failure(IllegalArgumentException("User not found"))
+            val currentUser = userRepository.getUserById(userId).first() ?: return Result.failure(
+                IllegalArgumentException("User not found")
+            )
 
             val updatedUser = currentUser.copy(
                 name = name ?: currentUser.name,
                 bio = bio ?: currentUser.bio,
-                phoneNumber = phoneNumber ?: currentUser.phoneNumber
+                phoneNumber = phoneNumber ?: currentUser.phoneNumber,
+                profileImageUri = profileImageUri ?: currentUser.profileImageUri
             )
 
             userRepository.updateUser(updatedUser, newPassword)
-            val refreshedUser = userRepository.getUserById(userId).first()
-                ?: return Result.failure(Exception("Failed to update user"))
+            val refreshedUser = userRepository.getUserById(userId).first() ?: return Result.failure(
+                Exception("Failed to update user")
+            )
 
             // Update auth state if the updated user is the current user
             if (_authState.value.currentUser?.id == userId) {

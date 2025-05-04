@@ -200,7 +200,9 @@ class ProfileViewModel @Inject constructor(
                     userId = currentUser.id,
                     name = currentState.editName,
                     bio = currentState.editBio.takeIf { it.isNotBlank() },
-                    phoneNumber = currentState.editPhoneNumber.takeIf { it.isNotBlank() })
+                    phoneNumber = currentState.editPhoneNumber.takeIf { it.isNotBlank() },
+                    profileImageUri = currentState.editProfileImage
+                )
 
                 if (result.isSuccess) {
                     _uiState.update {

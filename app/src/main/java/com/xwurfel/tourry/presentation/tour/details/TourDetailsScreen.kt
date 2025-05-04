@@ -1,6 +1,7 @@
 package com.xwurfel.tourry.presentation.tour.details
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -57,7 +58,9 @@ fun TourDetailsScreenRoute(
     tourId: Long,
     onBackClicked: () -> Unit,
     onEditClicked: (Long) -> Unit,
-    onBookNowClicked: (Long) -> Unit
+    onBookNowClicked: (Long) -> Unit,
+    onEditRouteClicked: (Long) -> Unit,
+    onCheckInClicked: (Long) -> Unit
 ) {
     val viewModel: TourDetailsViewModel = hiltViewModel()
     val uiState = viewModel.uiState.collectAsStateWithLifecycle()
@@ -90,7 +93,9 @@ fun TourDetailsScreenRoute(
                 uiState = uiState.value,
                 onBackClicked = onBackClicked,
                 onEditClicked = { onEditClicked(tourId) },
-                onBookNowClicked = { onBookNowClicked(tourId) }
+                onBookNowClicked = { onBookNowClicked(tourId) },
+                onEditRouteClicked = { onEditRouteClicked(tourId) },
+                onCheckInClicked = { onCheckInClicked(tourId) }
             )
         }
     }
@@ -102,7 +107,9 @@ fun TourDetailsScreen(
     uiState: TourDetailsUiState,
     onBackClicked: () -> Unit,
     onEditClicked: () -> Unit,
-    onBookNowClicked: () -> Unit
+    onBookNowClicked: () -> Unit,
+    onEditRouteClicked: () -> Unit,
+    onCheckInClicked: () -> Unit
 ) {
     val tour = uiState.tour ?: return
     val dateFormatter = DateTimeFormatter.ofPattern("MMM dd, yyyy HH:mm")
@@ -269,6 +276,71 @@ fun TourDetailsScreen(
                         title = "Category",
                         content = uiState.categoryName ?: "Uncategorized"
                     )
+                }
+            }
+
+            // Tour Route & Check-in Card
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                elevation = CardDefaults.cardElevation(4.dp),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                ) {
+                    Text(
+                        text = "Tour Route",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = "Follow the planned route for this tour and check in at various points of interest.",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // Tour organizer can edit route
+                        if (uiState.isOrganizerView) {
+                            Button(
+                                onClick = onEditRouteClicked,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Edit,
+                                    contentDescription = null
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Edit Route")
+                            }
+                        }
+
+                        // Participants can check in at route points
+                        if (!uiState.isOrganizerView) {
+                            Button(
+                                onClick = onCheckInClicked,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.LocationOn,
+                                    contentDescription = null
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Check In")
+                            }
+                        }
+                    }
                 }
             }
 

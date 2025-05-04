@@ -8,6 +8,6 @@ data class TourCategoryEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val name: String,
     val description: String,
-    val iconName: String? // For example, "hiking", "food", "cultural", etc.
-    // TODO: check if this is a good idea
+    val iconName: String?,
+    val icon: String?,
 )

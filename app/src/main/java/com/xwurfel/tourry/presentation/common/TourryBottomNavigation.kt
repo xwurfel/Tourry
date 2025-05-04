@@ -14,7 +14,7 @@ fun TourryBottomNavigation(
 ) {
     NavigationBar {
         BottomNavItem.entries.forEach { item ->
-            val selected = currentRoute::class == item.route::class
+            val selected = currentRoute == item.route
 
             NavigationBarItem(
                 icon = {
