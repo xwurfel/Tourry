@@ -1,6 +1,8 @@
 package com.xwurfel.tourry.core
 
 import android.app.Application
+import com.xwurfel.tourry.data.auth.TokenManager
+import com.xwurfel.tourry.data.sync.SyncManager
 import dagger.hilt.android.HiltAndroidApp
 import javax.inject.Inject
 
@@ -8,10 +10,13 @@ import javax.inject.Inject
 class TourryApplication : Application() {
 
     @Inject
-    lateinit var databaseSeeder: DatabaseSeeder
+    lateinit var syncManager: SyncManager
+
+    @Inject
+    lateinit var tokenManager: TokenManager
 
     override fun onCreate() {
         super.onCreate()
-        databaseSeeder.seed()
+        syncManager.scheduleSyncWork()
     }
 }

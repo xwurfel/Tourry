@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.room.Room
 import com.xwurfel.tourry.core.AppDatabase
 import com.xwurfel.tourry.core.migration.MIGRATION_2_3
+import com.xwurfel.tourry.core.migration.MIGRATION_3_4
+import com.xwurfel.tourry.core.migration.MIGRATION_5_6
 import com.xwurfel.tourry.data.booking.dao.BookingDao
 import com.xwurfel.tourry.data.category.dao.TourCategoryDao
 import com.xwurfel.tourry.data.checkin.dao.CheckInDao
@@ -30,7 +32,7 @@ object DatabaseModule {
             AppDatabase::class.java,
             "app_database"
         )
-            .addMigrations(MIGRATION_2_3)
+            .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_5_6)
             .fallbackToDestructiveMigration(false) // For development only, consider proper migrations in production
             .build()
     }

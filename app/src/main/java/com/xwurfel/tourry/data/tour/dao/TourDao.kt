@@ -13,6 +13,9 @@ interface TourDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTour(tourEntity: TourEntity): Long
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertTours(tourEntities: List<TourEntity>)
+
     @Query("SELECT * FROM tours")
     fun getAllTours(): Flow<List<TourEntity>>
 
@@ -33,4 +36,10 @@ interface TourDao {
 
     @Query("DELETE FROM tours WHERE id = :id")
     suspend fun deleteTour(id: Long)
+
+    @Query("DELETE FROM tours")
+    suspend fun deleteAllTours()
+
+    @Query("SELECT EXISTS(SELECT * FROM tours WHERE id = :id)")
+    suspend fun isTourSaved(id: Long): Boolean
 }

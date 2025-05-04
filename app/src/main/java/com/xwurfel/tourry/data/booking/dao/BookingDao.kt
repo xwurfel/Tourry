@@ -14,6 +14,9 @@ interface BookingDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertBooking(bookingEntity: BookingEntity): Long
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertBookings(bookingEntities: List<BookingEntity>)
+
     @Query("SELECT * FROM bookings")
     fun getAllBookings(): Flow<List<BookingEntity>>
 
@@ -39,12 +42,26 @@ interface BookingDao {
     suspend fun updatePaymentStatus(id: Long, processed: Boolean)
 
     @Query("SELECT COUNT(*) FROM bookings WHERE tourId = :tourId AND status != :excludeStatus")
-    suspend fun getActiveBookingsCountForTour(tourId: Long, excludeStatus: BookingStatus = BookingStatus.CANCELLED): Int
+    suspend fun getActiveBookingsCountForTour(
+        tourId: Long,
+        excludeStatus: BookingStatus = BookingStatus.CANCELLED
+    ): Int
 
     @Query("SELECT SUM(numberOfParticipants) FROM bookings WHERE tourId = :tourId AND status != :excludeStatus")
-    suspend fun getTotalParticipantsForTour(tourId: Long, excludeStatus: BookingStatus = BookingStatus.CANCELLED): Int?
+    suspend fun getTotalParticipantsForTour(
+        tourId: Long,
+        excludeStatus: BookingStatus = BookingStatus.CANCELLED
+    ): Int?
+
+    @Transaction
+    @Query("DELETE FROM bookings")
+    suspend fun deleteAllBookings()
 
     @Transaction
     @Query("DELETE FROM bookings WHERE id = :id")
     suspend fun deleteBooking(id: Long)
+
+    @Transaction
+    @Query("DELETE FROM bookings WHERE tourId = :tourId")
+    suspend fun deleteBookingsForTour(tourId: Long)
 }

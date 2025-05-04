@@ -13,13 +13,20 @@ interface CheckInRepository {
 
     fun getCheckInsByUserAndTour(userId: Long, tourId: Long): Flow<List<CheckIn>>
 
-    suspend fun getCheckInByUserTourAndRoutePoint(userId: Long, tourId: Long, routePointId: Long): CheckIn?
+    suspend fun getCheckInByUserTourAndRoutePoint(
+        userId: Long,
+        tourId: Long,
+        routePointId: Long
+    ): CheckIn?
 
     suspend fun hasCheckedIn(userId: Long, tourId: Long, routePointId: Long): Boolean
 
     suspend fun getCheckInsCountByUserAndTour(userId: Long, tourId: Long): Int
 
-    fun getCheckInsByTimeRange(startTime: LocalDateTime, endTime: LocalDateTime): Flow<List<CheckIn>>
+    fun getCheckInsByTimeRange(
+        startTime: LocalDateTime,
+        endTime: LocalDateTime
+    ): Flow<List<CheckIn>>
 
     suspend fun deleteCheckIn(checkInId: Long)
 }

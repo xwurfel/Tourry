@@ -13,6 +13,8 @@ import com.xwurfel.tourry.data.poi.dao.PoiDao
 import com.xwurfel.tourry.data.poi.entity.PoiEntity
 import com.xwurfel.tourry.data.route.dao.RoutePointDao
 import com.xwurfel.tourry.data.route.entity.RoutePointEntity
+import com.xwurfel.tourry.data.sync.SyncEntity
+import com.xwurfel.tourry.data.sync.dao.SyncDao
 import com.xwurfel.tourry.data.tour.dao.TourDao
 import com.xwurfel.tourry.data.tour.entity.TourEntity
 import com.xwurfel.tourry.data.user.dao.UserDao
@@ -28,8 +30,9 @@ import com.xwurfel.tourry.util.converters.DateTimeConverters
         TourCategoryEntity::class,
         RoutePointEntity::class,
         CheckInEntity::class,
+        SyncEntity::class
     ],
-    version = 5
+    version = 6
 )
 @TypeConverters(DateTimeConverters::class)
 abstract class AppDatabase : RoomDatabase() {
@@ -40,4 +43,5 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun tourCategoryDao(): TourCategoryDao
     abstract fun routePointDao(): RoutePointDao
     abstract fun checkInDao(): CheckInDao
+    abstract fun syncDao(): SyncDao
 }

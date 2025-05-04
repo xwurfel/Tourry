@@ -76,6 +76,7 @@ dependencies {
     // DI
     implementation(libs.hilt.android)
     implementation(libs.androidx.hilt.navigation.compose)
+    implementation(libs.hilt.work)
     ksp(libs.hilt.compiler)
 
     // Accompanist permissions
@@ -95,6 +96,21 @@ dependencies {
 
     // Fonts
     implementation(libs.androidx.ui.text.google.fonts)
+
+    // Retrofit
+    implementation(libs.retrofit)
+    implementation(libs.converter.gson)
+
+    // OkHttp
+    implementation(libs.okhttp)
+    implementation(libs.logging.interceptor)
+
+    // Encryption
+    implementation(libs.androidx.security.state)
+    implementation(libs.androidx.security.crypto)
+
+    // WorkManager
+    implementation(libs.androidx.work.runtime.ktx)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
