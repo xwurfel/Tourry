@@ -39,9 +39,12 @@ import androidx.compose.material.icons.filled.AddAPhoto
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
@@ -102,6 +105,7 @@ import com.xwurfel.tourry.domain.route.model.RoutePoint
 import com.xwurfel.tourry.presentation.common.ErrorDialogContent
 import com.xwurfel.tourry.presentation.common.LoadingScreenContent
 import com.xwurfel.tourry.presentation.common.SuccessDialogContent
+import com.xwurfel.tourry.util.permissions.LocationPermissionsHandler
 import kotlinx.coroutines.delay
 
 @Composable
@@ -112,17 +116,26 @@ fun TourCheckInScreenRoute(
     val viewModel: TourCheckInViewModel = hiltViewModel()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+    var showPermissionsDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(tourId) {
         viewModel.loadTourCheckInData(tourId)
     }
 
-    // Refresh location periodically
     LaunchedEffect(Unit) {
         while (true) {
             viewModel.updateUserLocation()
-            delay(10000) // Update every 10 seconds
+            delay(10000)
         }
+    }
+
+    if (showPermissionsDialog) {
+        LocationPermissionsHandler(
+            onPermissionsGranted = {
+                showPermissionsDialog = false
+                viewModel.enableGeofencing()
+            }
+        )
     }
 
     when {
@@ -146,7 +159,9 @@ fun TourCheckInScreenRoute(
                 onCheckInNoteChanged = viewModel::onCheckInNoteChanged,
                 onCheckInImageSelected = viewModel::onCheckInImageSelected,
                 onCheckInClicked = { viewModel.checkInToSelectedPoint() },
-                onForceCheckInClicked = { viewModel.checkInToSelectedPoint(forceCheckIn = true) }
+                onForceCheckInClicked = { viewModel.checkInToSelectedPoint(forceCheckIn = true) },
+                onEnableGeofencing = { showPermissionsDialog = true },
+                onDisableGeofencing = viewModel::disableGeofencing
             )
         }
     }
@@ -169,7 +184,9 @@ fun TourCheckInScreen(
     onCheckInNoteChanged: (String) -> Unit,
     onCheckInImageSelected: (Uri) -> Unit,
     onCheckInClicked: () -> Unit,
-    onForceCheckInClicked: () -> Unit
+    onForceCheckInClicked: () -> Unit,
+    onEnableGeofencing: () -> Unit,
+    onDisableGeofencing: () -> Unit
 ) {
     val cameraPositionState = rememberCameraPositionState()
     var showMap by remember { mutableStateOf(false) }
@@ -223,6 +240,26 @@ fun TourCheckInScreen(
                             contentDescription = "Back"
                         )
                     }
+                },
+                actions = {
+                    // Geofencing toggle
+                    if (uiState.geofencingEnabled) {
+                        IconButton(onClick = onDisableGeofencing) {
+                            Icon(
+                                imageVector = Icons.Default.Notifications,
+                                contentDescription = "Disable Notifications",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    } else {
+                        IconButton(onClick = onEnableGeofencing) {
+                            Icon(
+                                imageVector = Icons.Default.NotificationsOff,
+                                contentDescription = "Enable Notifications",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
                 }
             )
         },
@@ -247,6 +284,7 @@ fun TourCheckInScreen(
                 .padding(padding)
         ) {
             if (showMap) {
+                // Map View
                 MapView(
                     uiState = uiState,
                     cameraPositionState = cameraPositionState,
@@ -254,11 +292,87 @@ fun TourCheckInScreen(
                     onCloseMap = { showMap = false }
                 )
             } else {
+                // List View
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(16.dp)
                 ) {
+                    // Geofencing card if available
+                    if (uiState.geofencingEnabled) {
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 16.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer
+                            )
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Notifications,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+
+                                Spacer(modifier = Modifier.width(16.dp))
+
+                                Text(
+                                    text = "Geofence alerts are enabled",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+
+                                Spacer(modifier = Modifier.weight(1f))
+
+                                TextButton(onClick = onDisableGeofencing) {
+                                    Text("Disable")
+                                }
+                            }
+                        }
+                    } else {
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 16.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant
+                            )
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.NotificationsOff,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+
+                                Spacer(modifier = Modifier.width(16.dp))
+
+                                Text(
+                                    text = "Enable notifications when you're near tour stops",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    modifier = Modifier.weight(1f),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+
+                                Button(onClick = onEnableGeofencing) {
+                                    Text("Enable")
+                                }
+                            }
+                        }
+                    }
+
+                    // Progress Bar
                     Text(
                         text = "Your Progress",
                         style = MaterialTheme.typography.titleMedium,
@@ -284,6 +398,7 @@ fun TourCheckInScreen(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
+                    // Check-in points list
                     RoutePointsList(
                         routePoints = uiState.routePoints,
                         checkedInPoints = uiState.checkedInPoints,

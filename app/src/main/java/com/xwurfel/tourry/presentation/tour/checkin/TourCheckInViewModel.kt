@@ -1,6 +1,7 @@
 package com.xwurfel.tourry.presentation.tour.checkin
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.net.Uri
 import android.util.Log
 import androidx.annotation.RequiresPermission
@@ -52,7 +53,7 @@ class TourCheckInViewModel @Inject constructor(
     private val checkInService: CheckInService,
     private val authService: AuthService,
     private val userLocationRepository: UserLocationRepository,
-    private val geofencingService: GeofencingService,
+    private val geofencingService: GeofencingService
 ) : ViewModel() {
 
     companion object {
@@ -62,6 +63,7 @@ class TourCheckInViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(TourCheckInUiState())
     val uiState: StateFlow<TourCheckInUiState> = _uiState.asStateFlow()
 
+    @SuppressLint("MissingPermission")
     fun loadTourCheckInData(tourId: Long) {
         viewModelScope.launch {
             try {
@@ -78,7 +80,6 @@ class TourCheckInViewModel @Inject constructor(
                     return@launch
                 }
 
-                // Load tour details
                 val tour = tourService.getTourById(tourId).first()
                 if (tour == null) {
                     _uiState.update {
@@ -90,7 +91,6 @@ class TourCheckInViewModel @Inject constructor(
                     return@launch
                 }
 
-                // Load route points with check-in status
                 val routePointsWithStatus = checkInService.getTourRoutePointsWithCheckInStatus(
                     currentUser.id,
                     tourId
@@ -101,19 +101,16 @@ class TourCheckInViewModel @Inject constructor(
                     .filter { it.second }
                     .map { it.first.id }
 
-                // Calculate progress
                 val progressPercentage = if (routePoints.isEmpty()) {
                     0f
                 } else {
                     checkedInPointIds.size.toFloat() / routePoints.size.toFloat()
                 }
 
-                // Get current location
                 val location = userLocationRepository.getCurrentLocation()
                 val userLocation = location?.let { LatLng(it.latitude, it.longitude) }
 
                 val geofencingEnabled = geofencingService.hasRequiredPermissions()
-
 
                 _uiState.update {
                     it.copy(
@@ -127,8 +124,12 @@ class TourCheckInViewModel @Inject constructor(
                     )
                 }
 
-                // Start observing check-ins to keep the UI updated
                 observeCheckIns(currentUser.id, tourId)
+
+                // Set up geofences if enabled
+                if (geofencingEnabled && routePoints.isNotEmpty()) {
+                    setupGeofences(tourId, routePoints)
+                }
 
             } catch (e: Exception) {
                 ensureActive()
@@ -150,11 +151,11 @@ class TourCheckInViewModel @Inject constructor(
             val result = geofencingService.addGeofencesForRoutePoints(routePoints, tourId)
             if (result.isFailure) {
                 result.exceptionOrNull()?.let { exception ->
-                    Log.e(TAG, exception.message.toString())
+                    Log.e(TAG, exception.message ?: "Failed to add geofences")
                 }
             }
         } catch (e: Exception) {
-            Log.e(TAG, e.message.toString())
+            Log.e(TAG, e.message ?: "Failed to add geofences")
         }
     }
 
@@ -165,7 +166,7 @@ class TourCheckInViewModel @Inject constructor(
             try {
                 geofencingService.removeGeofencesForTour(tourId)
             } catch (e: Exception) {
-                Log.e(TAG, e.message.toString())
+                Log.e(TAG, e.message ?: "Failed to add geofences")
             }
         }
     }
@@ -271,8 +272,7 @@ class TourCheckInViewModel @Inject constructor(
                     _uiState.update {
                         it.copy(
                             isCheckingIn = false,
-                            errorMessage = result.exceptionOrNull()?.message
-                                ?: "Failed to check in"
+                            errorMessage = result.exceptionOrNull()?.message ?: "Failed to check in"
                         )
                     }
                 }
@@ -282,6 +282,89 @@ class TourCheckInViewModel @Inject constructor(
                     it.copy(
                         isCheckingIn = false,
                         errorMessage = e.message ?: "An unexpected error occurred"
+                    )
+                }
+            }
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    fun enableGeofencing() {
+        val currentState = _uiState.value
+        if (!geofencingService.hasRequiredPermissions()) {
+            _uiState.update {
+                it.copy(
+                    errorMessage = "Location permission is required for geofencing"
+                )
+            }
+            return
+        }
+
+        val tourId = currentState.tour?.id ?: return
+        val routePoints = currentState.routePoints
+
+        if (routePoints.isEmpty()) {
+            _uiState.update {
+                it.copy(
+                    errorMessage = "No route points available for geofencing"
+                )
+            }
+            return
+        }
+
+        viewModelScope.launch {
+            try {
+                val result = geofencingService.addGeofencesForRoutePoints(routePoints, tourId)
+                if (result.isSuccess) {
+                    _uiState.update {
+                        it.copy(
+                            geofencingEnabled = true,
+                            successMessage = "Geofence alerts enabled for this tour"
+                        )
+                    }
+                } else {
+                    _uiState.update {
+                        it.copy(
+                            errorMessage = result.exceptionOrNull()?.message ?: "Failed to enable geofencing"
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                ensureActive()
+                _uiState.update {
+                    it.copy(
+                        errorMessage = e.message ?: "Failed to enable geofencing"
+                    )
+                }
+            }
+        }
+    }
+
+    fun disableGeofencing() {
+        val tourId = _uiState.value.tour?.id ?: return
+
+        viewModelScope.launch {
+            try {
+                val result = geofencingService.removeGeofencesForTour(tourId)
+                if (result.isSuccess) {
+                    _uiState.update {
+                        it.copy(
+                            geofencingEnabled = false,
+                            successMessage = "Geofence alerts disabled"
+                        )
+                    }
+                } else {
+                    _uiState.update {
+                        it.copy(
+                            errorMessage = result.exceptionOrNull()?.message ?: "Failed to disable geofencing"
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                ensureActive()
+                _uiState.update {
+                    it.copy(
+                        errorMessage = e.message ?: "Failed to disable geofencing"
                     )
                 }
             }
