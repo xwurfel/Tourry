@@ -11,6 +11,7 @@ import com.xwurfel.tourry.data.category.dao.TourCategoryDao
 import com.xwurfel.tourry.data.checkin.dao.CheckInDao
 import com.xwurfel.tourry.data.poi.dao.PoiDao
 import com.xwurfel.tourry.data.route.dao.RoutePointDao
+import com.xwurfel.tourry.data.sync.dao.SyncDao
 import com.xwurfel.tourry.data.tour.dao.TourDao
 import com.xwurfel.tourry.data.user.dao.UserDao
 import dagger.Module
@@ -70,5 +71,10 @@ object DatabaseModule {
     @Provides
     fun provideCheckInDao(database: AppDatabase): CheckInDao {
         return database.checkInDao()
+    }
+
+    @Provides
+    fun provideSyncDao(database: AppDatabase): SyncDao {
+        return database.syncDao()
     }
 }

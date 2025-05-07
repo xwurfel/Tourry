@@ -10,6 +10,9 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface TourCategoryDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertCategories(categories: List<TourCategoryEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertCategory(categoryEntity: TourCategoryEntity): Long
 
     @Query("SELECT * FROM tour_categories")
@@ -23,4 +26,7 @@ interface TourCategoryDao {
 
     @Query("DELETE FROM tour_categories WHERE id = :id")
     suspend fun deleteCategory(id: Long)
+
+    @Query("DELETE FROM tour_categories")
+    suspend fun deleteAllCategories()
 }

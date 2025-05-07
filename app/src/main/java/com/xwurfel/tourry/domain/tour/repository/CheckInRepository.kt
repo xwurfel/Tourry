@@ -1,5 +1,6 @@
 package com.xwurfel.tourry.domain.tour.repository
 
+import com.xwurfel.tourry.domain.route.model.RoutePoint
 import com.xwurfel.tourry.domain.tour.model.CheckIn
 import kotlinx.coroutines.flow.Flow
 import java.time.LocalDateTime
@@ -29,4 +30,9 @@ interface CheckInRepository {
     ): Flow<List<CheckIn>>
 
     suspend fun deleteCheckIn(checkInId: Long)
+
+    suspend fun getRoutePointsWithCheckInStatus(
+        userId: Long,
+        tourId: Long
+    ): List<Pair<RoutePoint, Boolean>>
 }

@@ -20,7 +20,6 @@ import com.xwurfel.tourry.presentation.booking.BookingScreenRoute
 import com.xwurfel.tourry.presentation.bookings.MyBookingsScreenRoute
 import com.xwurfel.tourry.presentation.common.LoadingScreenContent
 import com.xwurfel.tourry.presentation.common.TourryBottomNavigation
-import com.xwurfel.tourry.presentation.home.HomeScreenRoute
 import com.xwurfel.tourry.presentation.navigation.Destinations
 import com.xwurfel.tourry.presentation.poi_details.PoiDetailsScreenRoute
 import com.xwurfel.tourry.presentation.profile.ProfileScreenRoute
@@ -183,14 +182,6 @@ fun MainScreen() {
                 }, onNavigateToMyBookings = {
                     navController.navigate(Destinations.MyBookings)
                 })
-            }
-
-            // Original POI screens
-            composable<Destinations.Home> {
-                HomeScreenRoute(
-                    onNavigate = {
-                        navController.navigate(it)
-                    })
             }
 
             composable<Destinations.PoiSettings> {

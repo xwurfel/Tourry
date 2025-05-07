@@ -15,7 +15,7 @@ import javax.inject.Singleton
 
 @Singleton
 class AuthService @Inject constructor(
-    private val userRepository: UserRepository
+    private val userRepository: UserRepository,
 ) {
     private val _authState = MutableStateFlow(AuthState())
     val authState: StateFlow<AuthState> = _authState.asStateFlow()

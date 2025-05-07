@@ -6,9 +6,8 @@ import com.xwurfel.tourry.data.network.util.NetworkUtils
 import com.xwurfel.tourry.data.sync.SyncActionType
 import com.xwurfel.tourry.data.sync.SyncEntity
 import com.xwurfel.tourry.data.sync.dao.SyncDao
-import javax.inject.Inject
 
-abstract class BaseRepository @Inject constructor(
+abstract class BaseRepository(
     protected val context: Context,
     protected val syncDao: SyncDao,
     protected val gson: Gson

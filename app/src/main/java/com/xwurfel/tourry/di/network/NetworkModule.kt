@@ -1,14 +1,21 @@
 package com.xwurfel.tourry.di.network
 
-import android.content.Context
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
-import com.xwurfel.tourry.data.network.api.*
+import com.xwurfel.tourry.data.auth.TokenManager
+import com.xwurfel.tourry.data.network.api.AuthApi
+import com.xwurfel.tourry.data.network.api.BookingApi
+import com.xwurfel.tourry.data.network.api.CategoryApi
+import com.xwurfel.tourry.data.network.api.CheckInApi
+import com.xwurfel.tourry.data.network.api.FileUploadApi
+import com.xwurfel.tourry.data.network.api.RouteApi
+import com.xwurfel.tourry.data.network.api.TourApi
+import com.xwurfel.tourry.data.network.api.UserApi
 import com.xwurfel.tourry.data.network.interceptor.AuthInterceptor
+import com.xwurfel.tourry.data.network.util.LocalDateTimeAdapter
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
-import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
@@ -32,8 +39,8 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideAuthInterceptor(@ApplicationContext context: Context): AuthInterceptor {
-        return AuthInterceptor(context)
+    fun provideAuthInterceptor(tokenManager: TokenManager): AuthInterceptor {
+        return AuthInterceptor(tokenManager)
     }
 
     @Provides
@@ -104,7 +111,11 @@ object NetworkModule {
         return retrofit.create(UserApi::class.java)
     }
 
-    companion object {
-        private const val BASE_URL = "http://10.0.2.2:8080/api/"
+    @Provides
+    @Singleton
+    fun provideFileUploadApi(retrofit: Retrofit): FileUploadApi {
+        return retrofit.create(FileUploadApi::class.java)
     }
+
+    private const val BASE_URL = "http://10.0.2.2:8080/api/"
 }

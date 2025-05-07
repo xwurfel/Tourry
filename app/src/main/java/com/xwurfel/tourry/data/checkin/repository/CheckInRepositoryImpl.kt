@@ -1,8 +1,7 @@
 package com.xwurfel.tourry.data.checkin.repository
 
 import android.content.Context
-import android.net.Uri
-import com.google.android.gms.maps.model.LatLng
+import androidx.core.net.toUri
 import com.google.gson.Gson
 import com.xwurfel.tourry.data.checkin.dao.CheckInDao
 import com.xwurfel.tourry.data.checkin.mapper.toDomain
@@ -11,8 +10,12 @@ import com.xwurfel.tourry.data.network.api.CheckInApi
 import com.xwurfel.tourry.data.network.dto.CheckInCreateDto
 import com.xwurfel.tourry.data.network.util.ApiResponse
 import com.xwurfel.tourry.data.network.util.NetworkUtils
+import com.xwurfel.tourry.data.route.dao.RoutePointDao
+import com.xwurfel.tourry.data.route.mapper.toDomain
 import com.xwurfel.tourry.data.sync.SyncActionType
+import com.xwurfel.tourry.data.sync.SyncEntity
 import com.xwurfel.tourry.data.sync.dao.SyncDao
+import com.xwurfel.tourry.data.upload.FileUploadService
 import com.xwurfel.tourry.di.coroutines.IoDispatcher
 import com.xwurfel.tourry.domain.route.model.RoutePoint
 import com.xwurfel.tourry.domain.tour.model.CheckIn
@@ -20,17 +23,18 @@ import com.xwurfel.tourry.domain.tour.repository.CheckInRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.any
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import java.time.LocalDateTime
 import javax.inject.Inject
-import androidx.core.net.toUri
+import javax.inject.Singleton
 
+@Singleton
 class CheckInRepositoryImpl @Inject constructor(
     private val checkInApi: CheckInApi,
     private val checkInDao: CheckInDao,
+    private val routePointDao: RoutePointDao,
     private val fileUploadService: FileUploadService,
     private val syncDao: SyncDao,
     @ApplicationContext private val context: Context,
@@ -40,6 +44,7 @@ class CheckInRepositoryImpl @Inject constructor(
 
     override suspend fun saveCheckIn(checkIn: CheckIn): Long = withContext(ioDispatcher) {
         var imageUrl: String? = null
+
         if (checkIn.imageUri != null) {
             try {
                 val uri = checkIn.imageUri.toUri()
@@ -47,66 +52,76 @@ class CheckInRepositoryImpl @Inject constructor(
                 if (result.isSuccess) {
                     imageUrl = result.getOrThrow()
                 }
-            } catch (e: Exception) {
-                // Handle image upload failure but continue with check-in
+            } catch (_: Exception) {
             }
         }
 
         if (NetworkUtils.isNetworkAvailable(context)) {
-            // Create DTO
             val checkInCreateDto = CheckInCreateDto(
                 tourId = checkIn.tourId,
                 routePointId = checkIn.routePointId,
                 latitude = 0.0, // Replace with actual location if available
                 longitude = 0.0, // Replace with actual location if available
                 note = checkIn.note,
-                imageUrl = imageUrl,
-                forceCheckIn = false // Set to true if you want to bypass location check
+                imageUrl = imageUrl ?: checkIn.imageUri,
+                forceCheckIn = false // Set to true to bypass location check if needed
             )
 
-            // Make API call
-            when (val response = NetworkUtils.safeApiCall {
-                checkInApi.createCheckIn(checkInCreateDto)
-            }) {
-                is ApiResponse.Success -> {
-                    val createdCheckIn = response.data
+            try {
+                when (val response = NetworkUtils.safeApiCall {
+                    checkInApi.createCheckIn(checkInCreateDto)
+                }) {
+                    is ApiResponse.Success -> {
+                        val createdCheckIn = response.data
+                        val checkInEntity = CheckIn(
+                            id = createdCheckIn.id,
+                            userId = createdCheckIn.user.id,
+                            tourId = createdCheckIn.tour.id,
+                            routePointId = createdCheckIn.routePoint.id,
+                            timestamp = createdCheckIn.timestamp,
+                            note = createdCheckIn.note,
+                            imageUri = createdCheckIn.imageUrl
+                        ).toEntity()
 
-                    // Save to local cache
-                    val checkInEntity = checkIn.copy(
-                        id = createdCheckIn.id,
-                        imageUri = createdCheckIn.imageUrl
-                    ).toEntity()
+                        checkInDao.insertCheckIn(checkInEntity)
+                        return@withContext createdCheckIn.id
+                    }
 
-                    checkInDao.insertCheckIn(checkInEntity)
-                    return@withContext createdCheckIn.id
+                    is ApiResponse.Error -> {
+                        val localId = checkInDao.insertCheckIn(checkIn.toEntity())
+
+                        val syncEntity = SyncEntity(
+                            entityType = "check_in",
+                            entityId = localId,
+                            actionType = SyncActionType.CREATE,
+                            actionData = gson.toJson(checkIn.copy(id = localId))
+                        )
+                        syncDao.insertSyncAction(syncEntity)
+
+                        return@withContext localId
+                    }
+
+                    ApiResponse.Loading -> {
+                        throw Exception("Request is still loading")
+                    }
                 }
+            } catch (_: Exception) {
+                val localId = checkInDao.insertCheckIn(checkIn.toEntity())
 
-                is ApiResponse.Error -> {
-                    // Fall back to local save
-                    val localId = checkInDao.insertCheckIn(checkIn.toEntity())
+                val syncEntity = SyncEntity(
+                    entityType = "check_in",
+                    entityId = localId,
+                    actionType = SyncActionType.CREATE,
+                    actionData = gson.toJson(checkIn.copy(id = localId))
+                )
+                syncDao.insertSyncAction(syncEntity)
 
-                    // Mark for sync later
-                    val syncEntity = com.xwurfel.tourry.data.sync.SyncEntity(
-                        entityType = "check_in",
-                        entityId = localId,
-                        actionType = SyncActionType.CREATE,
-                        actionData = gson.toJson(checkIn.copy(id = localId))
-                    )
-                    syncDao.insertSyncAction(syncEntity)
-
-                    return@withContext localId
-                }
-
-                ApiResponse.Loading -> {
-                    throw Exception("Request is still loading")
-                }
+                return@withContext localId
             }
         } else {
-            // Save locally for sync later
             val localId = checkInDao.insertCheckIn(checkIn.toEntity())
 
-            // Mark for sync later
-            val syncEntity = com.xwurfel.tourry.data.sync.SyncEntity(
+            val syncEntity = SyncEntity(
                 entityType = "check_in",
                 entityId = localId,
                 actionType = SyncActionType.CREATE,
@@ -121,10 +136,8 @@ class CheckInRepositoryImpl @Inject constructor(
     override fun getCheckInsByUser(userId: Long): Flow<List<CheckIn>> = flow {
         if (NetworkUtils.isNetworkAvailable(context)) {
             try {
-                // API doesn't have a direct endpoint for this, so use the general endpoint
-                // and filter client-side
                 when (val response = NetworkUtils.safeApiCall {
-                    checkInApi.getCheckInsForTour(0) // We'll filter by user later
+                    checkInApi.getCheckInsForTour(0)
                 }) {
                     is ApiResponse.Success -> {
                         val checkIns = response.data
@@ -149,47 +162,276 @@ class CheckInRepositoryImpl @Inject constructor(
                     }
 
                     is ApiResponse.Error -> {
-                        // Fall back to local cache
-                        emit(checkInDao.getCheckInsByUser(userId).map { it.toDomain() })
+                        val localCheckIns =
+                            checkInDao.getCheckInsByUser(userId).first().map { it.toDomain() }
+                        emit(localCheckIns)
                     }
 
                     ApiResponse.Loading -> {
-                        // Should not happen
+                        val localCheckIns =
+                            checkInDao.getCheckInsByUser(userId).first().map { it.toDomain() }
+                        emit(localCheckIns)
                     }
                 }
-            } catch (e: Exception) {
-                // Fall back to local cache on any error
-                emit(checkInDao.getCheckInsByUser(userId).map { it.toDomain() })
+            } catch (_: Exception) {
+                val localCheckIns =
+                    checkInDao.getCheckInsByUser(userId).first().map { it.toDomain() }
+                emit(localCheckIns)
             }
         } else {
-            // Use local cache when offline
-            emit(checkInDao.getCheckInsByUser(userId).map { it.toDomain() })
+            val localCheckIns = checkInDao.getCheckInsByUser(userId).first().map { it.toDomain() }
+            emit(localCheckIns)
         }
     }
 
-    override fun getCheckInsByTour(tourId: Long): Flow<List<CheckIn>> {
-        TODO("Not yet implemented")
+    override fun getCheckInsByTour(tourId: Long): Flow<List<CheckIn>> = flow {
+        if (NetworkUtils.isNetworkAvailable(context)) {
+            try {
+                when (val response = NetworkUtils.safeApiCall {
+                    checkInApi.getCheckInsForTour(tourId)
+                }) {
+                    is ApiResponse.Success -> {
+                        val checkIns = response.data.map { dto ->
+                            CheckIn(
+                                id = dto.id,
+                                userId = dto.user.id,
+                                tourId = dto.tour.id,
+                                routePointId = dto.routePoint.id,
+                                timestamp = dto.timestamp,
+                                note = dto.note,
+                                imageUri = dto.imageUrl
+                            )
+                        }
+
+                        // Update local cache
+                        checkInDao.deleteCheckInsByTour(tourId)
+                        checkInDao.insertCheckIns(checkIns.map { it.toEntity() })
+
+                        emit(checkIns)
+                    }
+
+                    is ApiResponse.Error -> {
+                        val localCheckIns =
+                            checkInDao.getCheckInsByTour(tourId).first().map { it.toDomain() }
+                        emit(localCheckIns)
+                    }
+
+                    ApiResponse.Loading -> {
+                        val localCheckIns =
+                            checkInDao.getCheckInsByTour(tourId).first().map { it.toDomain() }
+                        emit(localCheckIns)
+                    }
+                }
+            } catch (_: Exception) {
+                val localCheckIns =
+                    checkInDao.getCheckInsByTour(tourId).first().map { it.toDomain() }
+                emit(localCheckIns)
+            }
+        } else {
+            val localCheckIns = checkInDao.getCheckInsByTour(tourId).first().map { it.toDomain() }
+            emit(localCheckIns)
+        }
     }
 
-    override fun getCheckInsByUserAndTour(
-        userId: Long,
-        tourId: Long
-    ): Flow<List<CheckIn>> {
-        TODO("Not yet implemented")
+    override fun getCheckInsByUserAndTour(userId: Long, tourId: Long): Flow<List<CheckIn>> = flow {
+        if (NetworkUtils.isNetworkAvailable(context)) {
+            try {
+                when (val response = NetworkUtils.safeApiCall {
+                    checkInApi.getCheckInsForTour(tourId)
+                }) {
+                    is ApiResponse.Success -> {
+                        val checkIns = response.data
+                            .filter { it.user.id == userId }
+                            .map { dto ->
+                                CheckIn(
+                                    id = dto.id,
+                                    userId = dto.user.id,
+                                    tourId = dto.tour.id,
+                                    routePointId = dto.routePoint.id,
+                                    timestamp = dto.timestamp,
+                                    note = dto.note,
+                                    imageUri = dto.imageUrl
+                                )
+                            }
+
+                        // Update local cache
+                        checkInDao.deleteCheckInsByUserAndTour(userId, tourId)
+                        checkInDao.insertCheckIns(checkIns.map { it.toEntity() })
+
+                        emit(checkIns)
+                    }
+
+                    is ApiResponse.Error -> {
+                        val localCheckIns =
+                            checkInDao.getCheckInsByUserAndTour(userId, tourId).first()
+                                .map { it.toDomain() }
+                        emit(localCheckIns)
+                    }
+
+                    ApiResponse.Loading -> {
+                        val localCheckIns =
+                            checkInDao.getCheckInsByUserAndTour(userId, tourId).first()
+                                .map { it.toDomain() }
+                        emit(localCheckIns)
+                    }
+                }
+            } catch (_: Exception) {
+                val localCheckIns = checkInDao.getCheckInsByUserAndTour(userId, tourId).first()
+                    .map { it.toDomain() }
+                emit(localCheckIns)
+            }
+        } else {
+            val localCheckIns =
+                checkInDao.getCheckInsByUserAndTour(userId, tourId).first().map { it.toDomain() }
+            emit(localCheckIns)
+        }
     }
 
     override suspend fun getCheckInByUserTourAndRoutePoint(
         userId: Long,
         tourId: Long,
         routePointId: Long
-    ): CheckIn? {
-        TODO("Not yet implemented")
+    ): CheckIn? = withContext(ioDispatcher) {
+        if (NetworkUtils.isNetworkAvailable(context)) {
+            try {
+                when (val response = NetworkUtils.safeApiCall {
+                    checkInApi.getRoutePointsWithCheckInStatus(tourId)
+                }) {
+                    is ApiResponse.Success -> {
+                        val isCheckedIn = response.data.find {
+                            it.routePoint.id == routePointId
+                        }?.isCheckedIn == true
+
+                        if (isCheckedIn) {
+                            // If it's checked in, we need to get the check-in details from all check-ins
+                            val checkInsResponse = NetworkUtils.safeApiCall {
+                                checkInApi.getCheckInsForTour(tourId)
+                            }
+
+                            if (checkInsResponse is ApiResponse.Success) {
+                                val checkIn = checkInsResponse.data
+                                    .filter {
+                                        it.user.id == userId &&
+                                                it.routePoint.id == routePointId
+                                    }
+                                    .map { dto ->
+                                        CheckIn(
+                                            id = dto.id,
+                                            userId = dto.user.id,
+                                            tourId = dto.tour.id,
+                                            routePointId = dto.routePoint.id,
+                                            timestamp = dto.timestamp,
+                                            note = dto.note,
+                                            imageUri = dto.imageUrl
+                                        )
+                                    }
+                                    .firstOrNull()
+
+                                // Cache the check-in if found
+                                checkIn?.let {
+                                    checkInDao.insertCheckIn(it.toEntity())
+                                }
+
+                                checkIn
+                            } else {
+                                checkInDao.getCheckInByUserTourAndRoutePoint(
+                                    userId,
+                                    tourId,
+                                    routePointId
+                                )?.toDomain()
+                            }
+                        } else {
+                            null
+                        }
+                    }
+
+                    is ApiResponse.Error -> {
+                        checkInDao.getCheckInByUserTourAndRoutePoint(userId, tourId, routePointId)
+                            ?.toDomain()
+                    }
+
+                    ApiResponse.Loading -> {
+                        checkInDao.getCheckInByUserTourAndRoutePoint(userId, tourId, routePointId)
+                            ?.toDomain()
+                    }
+                }
+            } catch (_: Exception) {
+                checkInDao.getCheckInByUserTourAndRoutePoint(userId, tourId, routePointId)
+                    ?.toDomain()
+            }
+        } else {
+            checkInDao.getCheckInByUserTourAndRoutePoint(userId, tourId, routePointId)?.toDomain()
+        }
     }
 
-    // Implement the remaining methods from the CheckInRepository interface
-    // using the same pattern: try API first, fall back to local cache when needed
+    override suspend fun hasCheckedIn(userId: Long, tourId: Long, routePointId: Long): Boolean =
+        withContext(ioDispatcher) {
+            if (NetworkUtils.isNetworkAvailable(context)) {
+                try {
+                    when (val response = NetworkUtils.safeApiCall {
+                        checkInApi.getRoutePointsWithCheckInStatus(tourId)
+                    }) {
+                        is ApiResponse.Success -> {
+                            response.data.find {
+                                it.routePoint.id == routePointId
+                            }?.isCheckedIn == true
+                        }
 
-    // Continuing from the previous implementation in CheckInRepositoryImpl
+                        is ApiResponse.Error -> {
+                            checkInDao.getCheckInByUserTourAndRoutePoint(
+                                userId,
+                                tourId,
+                                routePointId
+                            ) != null
+                        }
+
+                        ApiResponse.Loading -> {
+                            checkInDao.getCheckInByUserTourAndRoutePoint(
+                                userId,
+                                tourId,
+                                routePointId
+                            ) != null
+                        }
+                    }
+                } catch (_: Exception) {
+                    checkInDao.getCheckInByUserTourAndRoutePoint(
+                        userId,
+                        tourId,
+                        routePointId
+                    ) != null
+                }
+            } else {
+                checkInDao.getCheckInByUserTourAndRoutePoint(userId, tourId, routePointId) != null
+            }
+        }
+
+    override suspend fun getCheckInsCountByUserAndTour(userId: Long, tourId: Long): Int =
+        withContext(ioDispatcher) {
+            if (NetworkUtils.isNetworkAvailable(context)) {
+                try {
+                    when (val response = NetworkUtils.safeApiCall {
+                        checkInApi.getTourProgress(tourId)
+                    }) {
+                        is ApiResponse.Success -> {
+                            response.data.checkedInPoints
+                        }
+
+                        is ApiResponse.Error -> {
+                            checkInDao.getCheckInsCountByUserAndTour(userId, tourId)
+                        }
+
+                        ApiResponse.Loading -> {
+                            checkInDao.getCheckInsCountByUserAndTour(userId, tourId)
+                        }
+                    }
+                } catch (_: Exception) {
+                    checkInDao.getCheckInsCountByUserAndTour(userId, tourId)
+                }
+            } else {
+                checkInDao.getCheckInsCountByUserAndTour(userId, tourId)
+            }
+        }
+
     override suspend fun getRoutePointsWithCheckInStatus(
         userId: Long,
         tourId: Long
@@ -204,16 +446,13 @@ class CheckInRepositoryImpl @Inject constructor(
                             val routePoint = RoutePoint(
                                 id = dto.routePoint.id,
                                 tourId = tourId,
-                                location = LatLng(
-                                    dto.routePoint.latitude,
-                                    dto.routePoint.longitude
-                                ),
+                                location = dto.routePoint.location,
                                 title = dto.routePoint.title,
                                 description = dto.routePoint.description,
-                                order = dto.routePoint.orderIndex,
+                                order = dto.routePoint.order,
                                 durationMinutes = dto.routePoint.durationMinutes,
                                 arrivalInstructions = dto.routePoint.arrivalInstructions,
-                                imageUri = dto.routePoint.imageUrl
+                                imageUri = dto.routePoint.imageUri
                             )
                             Pair(routePoint, dto.isCheckedIn)
                         }
@@ -221,15 +460,13 @@ class CheckInRepositoryImpl @Inject constructor(
 
                     is ApiResponse.Error -> {
                         // Fall back to local implementation
-                        // This would require joining data from routePoints and checkIns tables
                         val routePoints = routePointDao.getRoutePointsForTour(tourId)
-                        val checkIns = checkInDao.getCheckInsByUserAndTour(userId, tourId)
+                        val checkIns = checkInDao.getCheckInsByUserAndTour(userId, tourId).first()
 
                         routePoints.map { entity ->
-                            Pair(
-                                entity.toDomain(),
-                                checkIns.any { it.routePointId == entity.id }
-                            )
+                            val routePoint = entity.toDomain()
+                            val isCheckedIn = checkIns.any { it.routePointId == entity.id }
+                            Pair(routePoint, isCheckedIn)
                         }
                     }
 
@@ -237,104 +474,92 @@ class CheckInRepositoryImpl @Inject constructor(
                         emptyList()
                     }
                 }
-            } catch (e: Exception) {
-                // Fall back to local implementation on error
+            } catch (_: Exception) {
                 val routePoints = routePointDao.getRoutePointsForTour(tourId)
-                val checkIns = checkInDao.getCheckInsByUserAndTour(userId, tourId)
+                val checkIns = checkInDao.getCheckInsByUserAndTour(userId, tourId).first()
 
                 routePoints.map { entity ->
-                    Pair(
-                        entity.toDomain(),
-                        checkIns.any { it.routePointId == entity.id }
-                    )
+                    val routePoint = entity.toDomain()
+                    val isCheckedIn = checkIns.any { it.routePointId == entity.id }
+                    Pair(routePoint, isCheckedIn)
                 }
             }
         } else {
-            // Use local data when offline
             val routePoints = routePointDao.getRoutePointsForTour(tourId)
-            val checkIns = checkInDao.getCheckInsByUserAndTour(userId, tourId)
+            val checkIns = checkInDao.getCheckInsByUserAndTour(userId, tourId).first()
 
             routePoints.map { entity ->
-                Pair(
-                    entity.toDomain(),
-                    checkIns.any { it.routePointId == entity.id }
-                )
+                val routePoint = entity.toDomain()
+                val isCheckedIn = checkIns.any { it.routePointId == entity.id }
+                Pair(routePoint, isCheckedIn)
             }
         }
     }
-
-    override suspend fun hasCheckedIn(userId: Long, tourId: Long, routePointId: Long): Boolean =
-        withContext(ioDispatcher) {
-            if (NetworkUtils.isNetworkAvailable(context)) {
-                try {
-                    when (val response = NetworkUtils.safeApiCall {
-                        checkInApi.getRoutePointsWithCheckInStatus(tourId)
-                    }) {
-                        is ApiResponse.Success -> {
-                            response.data.find {
-                                it.routePoint.id == routePointId
-                            }?.isCheckedIn ?: false
-                        }
-
-                        is ApiResponse.Error -> {
-                            // Fall back to local data
-                            checkInDao.getCheckInByUserTourAndRoutePoint(
-                                userId, tourId, routePointId
-                            ) != null
-                        }
-
-                        ApiResponse.Loading -> false
-                    }
-                } catch (e: Exception) {
-                    // Fall back to local data on error
-                    checkInDao.getCheckInByUserTourAndRoutePoint(
-                        userId, tourId, routePointId
-                    ) != null
-                }
-            } else {
-                // Use local data when offline
-                checkInDao.getCheckInByUserTourAndRoutePoint(
-                    userId, tourId, routePointId
-                ) != null
-            }
-        }
-
-    override suspend fun getCheckInsCountByUserAndTour(userId: Long, tourId: Long): Int =
-        withContext(ioDispatcher) {
-            if (NetworkUtils.isNetworkAvailable(context)) {
-                try {
-                    when (val response = NetworkUtils.safeApiCall {
-                        checkInApi.getCheckInCountForTour(tourId)
-                    }) {
-                        is ApiResponse.Success -> {
-                            response.data["count"] ?: 0
-                        }
-
-                        is ApiResponse.Error -> {
-                            // Fall back to local data
-                            checkInDao.getCheckInsCountByUserAndTour(userId, tourId)
-                        }
-
-                        ApiResponse.Loading -> 0
-                    }
-                } catch (e: Exception) {
-                    // Fall back to local data on error
-                    checkInDao.getCheckInsCountByUserAndTour(userId, tourId)
-                }
-            } else {
-                // Use local data when offline
-                checkInDao.getCheckInsCountByUserAndTour(userId, tourId)
-            }
-        }
 
     override fun getCheckInsByTimeRange(
         startTime: LocalDateTime,
         endTime: LocalDateTime
-    ): Flow<List<CheckIn>> {
-        TODO("Not yet implemented")
+    ): Flow<List<CheckIn>> = flow {
+        val localCheckIns =
+            checkInDao.getCheckInsByTimeRange(startTime, endTime).first().map { it.toDomain() }
+        emit(localCheckIns)
     }
 
-    override suspend fun deleteCheckIn(checkInId: Long) {
-        TODO("Not yet implemented")
+    override suspend fun deleteCheckIn(checkInId: Long) = withContext(ioDispatcher) {
+        // TODO: add check-in deletion to backend
+        // API may not support deleting check-ins, so implement with caution
+        if (NetworkUtils.isNetworkAvailable(context)) {
+            try {
+                // If the API supports deleting check-ins, use this pattern:
+                /*
+                when (val response = NetworkUtils.safeApiCall {
+                    checkInApi.deleteCheckIn(checkInId)
+                }) {
+                    is ApiResponse.Success -> {
+                        checkInDao.deleteCheckIn(checkInId)
+                    }
+                    is ApiResponse.Error -> {
+                        val syncEntity = SyncEntity(
+                            entityType = "check_in",
+                            entityId = checkInId,
+                            actionType = SyncActionType.DELETE
+                        )
+                        syncDao.insertSyncAction(syncEntity)
+
+                        // For UI updates, delete locally anyway
+                        checkInDao.deleteCheckIn(checkInId)
+                    }
+                    ApiResponse.Loading -> {
+                        // Should not happen with safeApiCall
+                    }
+                }
+                */
+
+                // For now, we'll just mark it for deletion and delete locally
+                val syncEntity = SyncEntity(
+                    entityType = "check_in",
+                    entityId = checkInId,
+                    actionType = SyncActionType.DELETE
+                )
+                syncDao.insertSyncAction(syncEntity)
+                checkInDao.deleteCheckIn(checkInId)
+            } catch (_: Exception) {
+                val syncEntity = SyncEntity(
+                    entityType = "check_in",
+                    entityId = checkInId,
+                    actionType = SyncActionType.DELETE
+                )
+                syncDao.insertSyncAction(syncEntity)
+                checkInDao.deleteCheckIn(checkInId)
+            }
+        } else {
+            val syncEntity = SyncEntity(
+                entityType = "check_in",
+                entityId = checkInId,
+                actionType = SyncActionType.DELETE
+            )
+            syncDao.insertSyncAction(syncEntity)
+            checkInDao.deleteCheckIn(checkInId)
+        }
     }
 }
