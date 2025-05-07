@@ -2,6 +2,7 @@ package com.xwurfel.tourry.data.sync
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
+import androidx.room.TypeConverter
 
 @Entity(tableName = "sync_actions")
 data class SyncEntity(
@@ -18,4 +19,16 @@ enum class SyncActionType {
     CREATE,
     UPDATE,
     DELETE
+}
+
+class SyncTypeConverters {
+    @TypeConverter
+    fun fromSyncActionType(value: SyncActionType): String {
+        return value.name
+    }
+
+    @TypeConverter
+    fun toSyncActionType(value: String): SyncActionType {
+        return SyncActionType.valueOf(value)
+    }
 }

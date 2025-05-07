@@ -1,60 +1,81 @@
 package com.xwurfel.tourry.domain.auth.service
 
 import android.net.Uri
+import com.xwurfel.tourry.data.auth.TokenManager
 import com.xwurfel.tourry.domain.auth.model.AuthState
+import com.xwurfel.tourry.domain.auth.repository.AuthRepository
 import com.xwurfel.tourry.domain.user.model.User
 import com.xwurfel.tourry.domain.user.model.UserRole
 import com.xwurfel.tourry.domain.user.repository.UserRepository
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 class AuthService @Inject constructor(
+    private val authRepository: AuthRepository,
     private val userRepository: UserRepository,
+    private val tokenManager: TokenManager
 ) {
     private val _authState = MutableStateFlow(AuthState())
     val authState: StateFlow<AuthState> = _authState.asStateFlow()
+
+    init {
+        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+            if (tokenManager.getToken() != null) {
+                val userId = tokenManager.getUserId()
+                if (userId > 0) {
+                    val user = userRepository.getUserById(userId).first()
+                    user?.let {
+                        _authState.value = AuthState(isAuthenticated = true, currentUser = it)
+                    }
+                }
+            }
+        }
+    }
 
     suspend fun registerUser(
         email: String, password: String, name: String, role: UserRole = UserRole.TOURIST
     ): Result<User> {
         return try {
-            val existingUser = userRepository.getUserByEmail(email).first()
-            if (existingUser != null) {
-                Result.failure(IllegalArgumentException("User with this email already exists"))
-            } else {
-                val newUser = User(
-                    email = email,
-                    name = name,
-                    bio = null,
-                    profileImageUri = null,
-                    phoneNumber = null,
-                    role = role
-                )
-                val userId = userRepository.registerUser(newUser, password)
-                val createdUser = userRepository.getUserById(userId).first()
-                    ?: return Result.failure(Exception("Failed to create user"))
+            val result = authRepository.register(email, password, name, role)
 
-                Result.success(createdUser)
+            if (result.isSuccess) {
+                val user = result.getOrNull()
+                _authState.value = AuthState(isAuthenticated = true, currentUser = user)
+                Result.success(user!!)
+            } else {
+                val error = result.exceptionOrNull() ?: Exception("Registration failed")
+                _authState.value = AuthState(error = error.message)
+                Result.failure(error)
             }
         } catch (e: Exception) {
+            _authState.value = AuthState(error = e.message)
             Result.failure(e)
         }
     }
 
     suspend fun login(email: String, password: String): Result<User> {
         return try {
-            val user = userRepository.authenticateUser(email, password) ?: return Result.failure(
-                IllegalArgumentException("Invalid credentials")
-            )
+            val result = authRepository.login(email, password)
 
-            _authState.value = AuthState(isAuthenticated = true, currentUser = user)
-            Result.success(user)
+            if (result.isSuccess) {
+                val user = result.getOrNull()
+                _authState.value = AuthState(isAuthenticated = true, currentUser = user)
+                Result.success(user!!)
+            } else {
+                val error = result.exceptionOrNull() ?: Exception("Login failed")
+                _authState.value = AuthState(error = error.message)
+                Result.failure(error)
+            }
         } catch (e: Exception) {
             _authState.value = AuthState(error = e.message)
             Result.failure(e)
@@ -62,16 +83,40 @@ class AuthService @Inject constructor(
     }
 
     fun logout() {
+        authRepository.logout()
         _authState.value = AuthState()
     }
 
     suspend fun getCurrentUser(): User? {
-        val currentUserId = _authState.value.currentUser?.id ?: return null
-        return userRepository.getUserById(currentUserId).first()
+        // If we have a current user in the auth state, return it
+        _authState.value.currentUser?.let { return it }
+
+        // Otherwise, check if we have a saved token and try to get the user
+        if (authRepository.isAuthenticated()) {
+            val userId = tokenManager.getUserId()
+            if (userId > 0) {
+                val user = userRepository.getUserById(userId).first()
+                user?.let {
+                    _authState.value = AuthState(isAuthenticated = true, currentUser = it)
+                }
+                return user
+            }
+        }
+
+        return null
     }
 
     fun observeCurrentUser(userId: Long): Flow<User?> {
         return userRepository.getUserById(userId)
+    }
+
+    suspend fun refreshAuthState() {
+        val user = getCurrentUser()
+        _authState.value = AuthState(
+            isAuthenticated = user != null,
+            currentUser = user,
+            error = null
+        )
     }
 
     suspend fun updateUserProfile(
@@ -126,5 +171,19 @@ class AuthService @Inject constructor(
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    suspend fun checkAndRefreshTokenIfNeeded(): Boolean {
+        if (tokenManager.isTokenExpired()) {
+            val refreshToken = tokenManager.getRefreshToken()
+            if (refreshToken != null) {
+                // Implement token refresh logic here
+                // This would call the authRepository.refreshToken() method
+                // For now, just return false to indicate refresh failed
+                return false
+            }
+            return false
+        }
+        return true
     }
 }

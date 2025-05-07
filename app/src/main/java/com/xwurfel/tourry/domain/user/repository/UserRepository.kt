@@ -5,9 +5,6 @@ import com.xwurfel.tourry.domain.user.model.UserRole
 import kotlinx.coroutines.flow.Flow
 
 interface UserRepository {
-    suspend fun registerUser(user: User, password: String): Long
-
-    suspend fun authenticateUser(email: String, password: String): User?
 
     fun getUserById(id: Long): Flow<User?>
 

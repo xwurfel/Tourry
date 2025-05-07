@@ -40,18 +40,6 @@ class UserRepositoryImpl @Inject constructor(
     @IoDispatcher private val ioDispatcher: CoroutineDispatcher
 ) : UserRepository {
 
-    override suspend fun registerUser(user: User, password: String): Long {
-        // This function should not be implemented here, as it's handled by the AuthRepository
-        // which manages the authentication flow. It's kept here just for interface compliance.
-        throw NotImplementedError("Registration should be handled by AuthRepository")
-    }
-
-    override suspend fun authenticateUser(email: String, password: String): User? {
-        // This function should not be implemented here, as it's handled by the AuthRepository
-        // which manages the authentication flow. It's kept here just for interface compliance.
-        throw NotImplementedError("Authentication should be handled by AuthRepository")
-    }
-
     override fun getUserById(id: Long): Flow<User?> = flow {
         if (NetworkUtils.isNetworkAvailable(context)) {
             try {

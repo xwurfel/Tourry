@@ -4,6 +4,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
@@ -19,6 +22,7 @@ fun ErrorDialogContent(
     errorMessage: String,
     onDismiss: () -> Unit
 ) {
+    val scrollState = rememberScrollState()
     Box(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
@@ -33,10 +37,13 @@ fun ErrorDialogContent(
                 )
             },
             text = {
-                Text(
-                    text = errorMessage,
-                    style = MaterialTheme.typography.bodyMedium
-                )
+                SelectionContainer {
+                    Text(
+                        text = errorMessage,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.verticalScroll(scrollState)
+                    )
+                }
             },
             confirmButton = {
                 Button(
@@ -50,7 +57,8 @@ fun ErrorDialogContent(
                 dismissOnBackPress = true,
                 dismissOnClickOutside = true
             ),
-            modifier = Modifier.padding(16.dp)
+            modifier = Modifier
+                .padding(16.dp)
         )
     }
 }

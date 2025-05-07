@@ -2,12 +2,15 @@ package com.xwurfel.tourry.di.repository
 
 import android.content.Context
 import com.google.gson.Gson
+import com.xwurfel.tourry.data.auth.TokenManager
+import com.xwurfel.tourry.data.auth.repository.AuthRepositoryImpl
 import com.xwurfel.tourry.data.booking.dao.BookingDao
 import com.xwurfel.tourry.data.booking.repository.BookingRepositoryImpl
 import com.xwurfel.tourry.data.category.dao.TourCategoryDao
 import com.xwurfel.tourry.data.category.repository.TourCategoryRepositoryImpl
 import com.xwurfel.tourry.data.checkin.dao.CheckInDao
 import com.xwurfel.tourry.data.checkin.repository.CheckInRepositoryImpl
+import com.xwurfel.tourry.data.network.api.AuthApi
 import com.xwurfel.tourry.data.network.api.BookingApi
 import com.xwurfel.tourry.data.network.api.CategoryApi
 import com.xwurfel.tourry.data.network.api.CheckInApi
@@ -26,6 +29,7 @@ import com.xwurfel.tourry.data.upload.FileUploadService
 import com.xwurfel.tourry.data.user.dao.UserDao
 import com.xwurfel.tourry.data.user.repository.UserRepositoryImpl
 import com.xwurfel.tourry.di.coroutines.IoDispatcher
+import com.xwurfel.tourry.domain.auth.repository.AuthRepository
 import com.xwurfel.tourry.domain.booking.repository.BookingRepository
 import com.xwurfel.tourry.domain.category.repository.TourCategoryRepository
 import com.xwurfel.tourry.domain.poi.repository.PoiRepository
@@ -182,5 +186,16 @@ object RepositoryModule {
             gson,
             ioDispatcher
         )
+    }
+
+    @Singleton
+    @Provides
+    fun provideAuthRepository(
+        authApi: AuthApi,
+        @ApplicationContext context: Context,
+        tokenManager: TokenManager,
+        @IoDispatcher ioDispatcher: CoroutineDispatcher
+    ): AuthRepository {
+        return AuthRepositoryImpl(authApi, tokenManager, context, ioDispatcher)
     }
 }

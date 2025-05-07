@@ -17,6 +17,7 @@ import com.xwurfel.tourry.receiver.GeofenceBroadcastReceiver
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.tasks.await
 
 @Singleton
 class GeofencingService @Inject constructor(
@@ -90,8 +91,7 @@ class GeofencingService @Inject constructor(
                 .addGeofences(geofenceList)
                 .build()
 
-            // TODO: fix Unresolved reference 'await'.
-            geofencingClient.addGeofences(geofencingRequest, geofencePendingIntent)//.await()
+            geofencingClient.addGeofences(geofencingRequest, geofencePendingIntent).await()
             Log.d(TAG, "Successfully added ${geofenceList.size} geofences for tour $tourId")
             return Result.success(Unit)
 
@@ -112,7 +112,7 @@ class GeofencingService @Inject constructor(
             // TODO: check this
             // We need to get the existing geofence IDs that match this tour ID
             // For simplicity, we'll just remove all geofences
-            geofencingClient.removeGeofences(geofencePendingIntent)//.await() Unresolved reference 'await'.
+            geofencingClient.removeGeofences(geofencePendingIntent).await()
             Log.d(TAG, "Removed all geofences for tour $tourId")
             return Result.success(Unit)
 
@@ -124,7 +124,7 @@ class GeofencingService @Inject constructor(
 
     suspend fun removeAllGeofences(): Result<Unit> {
         try {
-            geofencingClient.removeGeofences(geofencePendingIntent)// .await() Unresolved reference 'await'.
+            geofencingClient.removeGeofences(geofencePendingIntent).await()
             Log.d(TAG, "Removed all geofences")
             return Result.success(Unit)
 
