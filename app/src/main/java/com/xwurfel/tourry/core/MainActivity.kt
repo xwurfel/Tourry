@@ -10,6 +10,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.ui.Modifier
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.navigation.compose.rememberNavController
+import com.google.android.gms.maps.MapsInitializer
 import com.xwurfel.tourry.ui.navigation.AppNavGraph
 import com.xwurfel.tourry.ui.theme.TourryTheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -20,6 +21,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         installSplashScreen()
+        MapsInitializer.initialize(applicationContext)
         setContent {
             TourryTheme {
                 val navController = rememberNavController()

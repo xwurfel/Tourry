@@ -1,3 +1,15 @@
 <resources>
     <string name="app_name">Tourry</string>
+    <string name="location_tracking_channel_name">Location Tracking</string>
+    <string name="location_tracking_channel_description">Shows when your location is being tracked for a tour</string>
+    <string name="tracking_notification_title">Tracking location</string>
+    <string name="tracking_notification_text">Active tour: %1$s</string>
+    <string name="geofence_channel_name">Tour Group Alerts</string>
+    <string name="geofence_channel_description">Alerts when you leave the tour area</string>
+    <string name="regroup_channel_name">Regroup Requests</string>
+    <string name="regroup_channel_description">Notifications when the guide requests everyone to regroup</string>
+    <string name="geofence_exit_title">You\'ve left the tour area</string>
+    <string name="geofence_exit_text">Please return to the guide to stay with the group</string>
+    <string name="regroup_title">Time to regroup!</string>
+    <string name="regroup_text">The guide of %1$s has requested everyone to regroup</string>
 </resources>

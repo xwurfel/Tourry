@@ -12,6 +12,7 @@ import com.xwurfel.tourry.ui.auth.RegisterScreen
 import com.xwurfel.tourry.ui.discovery.TourDetailsScreen
 import com.xwurfel.tourry.ui.tourbuilder.SavedToursScreen
 import com.xwurfel.tourry.ui.tourbuilder.TourBuilderScreen
+import com.xwurfel.tourry.ui.tracking.GroupTrackingScreen
 
 @Composable
 fun AppNavGraph(
@@ -101,6 +102,17 @@ fun AppNavGraph(
                 onNavigateToNewTour = {
                     navController.navigate(Routes.TOUR_BUILDER_CREATE)
                 }
+            )
+        }
+
+        composable(
+            route = Routes.TOUR_TRACKING,
+            arguments = listOf(navArgument("groupId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val groupId = backStackEntry.arguments?.getString("groupId") ?: ""
+            GroupTrackingScreen(
+                groupId = groupId,
+                onNavigateBack = { navController.popBackStack() }
             )
         }
     }

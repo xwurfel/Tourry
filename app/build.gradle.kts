@@ -114,7 +114,9 @@ dependencies {
     implementation(libs.androidx.work.runtime.ktx)
 
     // Firebase
-    implementation(libs.firebase.bom)
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.database)
+    implementation(libs.firebase.messaging.ktx)
 
     //Datastore
     implementation(libs.androidx.datastore.preferences)
@@ -123,6 +125,7 @@ dependencies {
 
     implementation(libs.reorderable)
 
+    implementation(libs.androidx.lifecycle.service)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
