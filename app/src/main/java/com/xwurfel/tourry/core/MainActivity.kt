@@ -5,7 +5,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
-import com.xwurfel.tourry.presentation.main.MainScreen
 import com.xwurfel.tourry.ui.theme.TourryTheme
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -17,7 +16,7 @@ class MainActivity : ComponentActivity() {
         installSplashScreen()
         setContent {
             TourryTheme {
-                MainScreen()
+
             }
         }
     }
