@@ -12,6 +12,7 @@ import com.xwurfel.tourry.feature.tourbuilder.domain.model.WaypointDraft
 import com.xwurfel.tourry.feature.tourbuilder.domain.repository.RouteInfo
 import com.xwurfel.tourry.feature.tourbuilder.domain.repository.TourBuilderRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -34,7 +35,8 @@ data class TourBuilderState(
     val uploadInProgress: Boolean = false,
     val saveInProgress: Boolean = false,
     val isMapReady: Boolean = false,
-    val currentLocation: LatLng? = null
+    val currentLocation: LatLng? = null,
+    val focusOnLocationRequested: Boolean = false
 )
 
 @HiltViewModel
@@ -117,7 +119,7 @@ class TourBuilderViewModel @Inject constructor(
         val newOrder = currentDraft.waypoints.size
 
         val newWaypoint = WaypointDraft(
-            id = UUID.randomUUID().toString(), // Temporary ID until saved on the server
+            id = UUID.randomUUID().toString(),
             position = position,
             order = newOrder,
             title = "Waypoint ${newOrder + 1}"
@@ -326,7 +328,7 @@ class TourBuilderViewModel @Inject constructor(
         val selectedWaypointId = _state.value.selectedWaypointId ?: return
         val waypoint =
             _state.value.tourDraft.waypoints.find { it.id == selectedWaypointId } ?: return
-        val content = waypoint.contents.find { it.id == contentId } ?: return
+        waypoint.contents.find { it.id == contentId } ?: return
 
         _state.value = _state.value.copy(
             selectedContentId = contentId,
@@ -611,12 +613,6 @@ class TourBuilderViewModel @Inject constructor(
         )
     }
 
-    fun startEditingExistingContent() {
-        _state.value = _state.value.copy(
-            isEditingContent = true
-        )
-    }
-
     fun cancelEditing() {
         _state.value = _state.value.copy(
             isEditingWaypoint = false,
@@ -656,7 +652,26 @@ class TourBuilderViewModel @Inject constructor(
     }
 
     fun focusOnCurrentLocation() {
-        // This will be used from the UI when the user clicks on the "My Location" button
-        // The actual implementation would depend on how you're tracking location in your app
+        val currentLocation = _state.value.currentLocation
+        if (currentLocation != null) {
+            // Just update the state to trigger focus in the UI
+            _state.value = _state.value.copy(
+                selectedWaypointId = null,
+                isEditingWaypoint = false,
+                isEditingContent = false
+            )
+            // Use a special flag to indicate we want to focus on current location
+            // rather than creating a new boolean state property
+            viewModelScope.launch {
+                _state.value = _state.value.copy(
+                    focusOnLocationRequested = true
+                )
+                // Reset the flag after a short delay
+                delay(100)
+                _state.value = _state.value.copy(
+                    focusOnLocationRequested = false
+                )
+            }
+        }
     }
 }

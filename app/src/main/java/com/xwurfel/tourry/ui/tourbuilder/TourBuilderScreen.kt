@@ -48,6 +48,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
+import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
 import com.xwurfel.tourry.feature.tourbuilder.domain.model.ContentType
 import com.xwurfel.tourry.ui.tourbuilder.components.ContentEditor
@@ -69,14 +70,12 @@ fun TourBuilderScreen(
     val state by viewModel.state.collectAsState()
     val context = LocalContext.current
 
-    // Initialize tour if ID is provided
     LaunchedEffect(tourId) {
         if (tourId != null) {
             viewModel.loadTourDraft(tourId)
         }
     }
 
-    // Location permission handling
     val locationPermissionState = rememberPermissionState(
         Manifest.permission.ACCESS_FINE_LOCATION
     )
@@ -170,14 +169,13 @@ fun TourBuilderScreen(
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
-            // Only show if map is ready and not editing
             if (state.isMapReady && !state.isEditingWaypoint && !state.isEditingContent) {
                 FloatingActionButton(
                     onClick = {
                         if (state.selectedWaypointId != null) {
                             viewModel.selectWaypoint(null)
                         } else {
-                            // TODO: Focus on current location on map
+                            viewModel.focusOnCurrentLocation()
                         }
                     }
                 ) {
@@ -200,7 +198,6 @@ fun TourBuilderScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            // Main map view
             MapComponent(
                 waypoints = state.tourDraft.waypoints,
                 routeInfo = state.routeInfo,
@@ -216,7 +213,11 @@ fun TourBuilderScreen(
                     }
                 },
                 onMapLoaded = { viewModel.setMapReady(true) },
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize(),
+                hasLocationPermission = locationPermissionState.status.isGranted,
+                onMyLocationClick = { viewModel.focusOnCurrentLocation() },
+                onMyLocationUpdated = { location -> viewModel.updateCurrentLocation(location) },
+                focusOnLocationRequested = state.focusOnLocationRequested
             )
 
             // Editors and panels
@@ -283,6 +284,15 @@ fun TourBuilderScreen(
                                     selectImageLauncher.launch("image/*")
                                 } else if (contentType == ContentType.AUDIO) {
                                     selectAudioLauncher.launch("audio/*")
+                                }
+                            },
+                            onDelete = selectedContent?.let { content ->
+                                {
+                                    viewModel.deleteContent(
+                                        waypointId = state.selectedWaypointId!!,
+                                        contentId = content.id ?: ""
+                                    )
+                                    viewModel.cancelEditing()
                                 }
                             }
                         )

@@ -1,10 +1,16 @@
 package com.xwurfel.tourry.ui.tourbuilder.components
 
+import android.os.Looper
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
@@ -14,10 +20,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.google.android.gms.location.LocationCallback
+import com.google.android.gms.location.LocationRequest
+import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
 import com.google.android.gms.maps.CameraUpdate
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.CameraPosition
@@ -52,7 +63,9 @@ fun MapComponent(
     modifier: Modifier = Modifier,
     initialLocation: LatLng? = null,
     hasLocationPermission: Boolean = false,
-    onMyLocationClick: () -> Unit
+    onMyLocationClick: () -> Unit,
+    onMyLocationUpdated: (LatLng) -> Unit = {},
+    focusOnLocationRequested: Boolean = false
 ) {
     val context = LocalContext.current
     var currentUserLocation by remember { mutableStateOf<LatLng?>(null) }
@@ -65,21 +78,52 @@ fun MapComponent(
         )
     }
 
+    LaunchedEffect(waypoints, currentUserLocation) {
+        if (currentUserLocation != null) {
+            onMyLocationUpdated(currentUserLocation!!)
+        }
+    }
+
     DisposableEffect(hasLocationPermission) {
         if (hasLocationPermission) {
             val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
             try {
                 fusedLocationClient.lastLocation.addOnSuccessListener { location ->
                     location?.let {
-                        currentUserLocation = LatLng(it.latitude, it.longitude)
+                        val newLocation = LatLng(it.latitude, it.longitude)
+                        currentUserLocation = newLocation
+                        onMyLocationUpdated(newLocation)
                     }
                 }
-            } catch (_: SecurityException) {
-                // Permission denied or removed
-            }
-        }
 
-        onDispose {}
+                val locationRequest =
+                    LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 5000).build()
+
+                val locationCallback = object : LocationCallback() {
+                    override fun onLocationResult(locationResult: LocationResult) {
+                        locationResult.lastLocation?.let {
+                            val newLocation = LatLng(it.latitude, it.longitude)
+                            currentUserLocation = newLocation
+                            onMyLocationUpdated(newLocation)
+                        }
+                    }
+                }
+
+                fusedLocationClient.requestLocationUpdates(
+                    locationRequest,
+                    locationCallback,
+                    Looper.getMainLooper()
+                )
+
+                onDispose {
+                    fusedLocationClient.removeLocationUpdates(locationCallback)
+                }
+            } catch (_: SecurityException) {
+                onDispose { }
+            }
+        } else {
+            onDispose { }
+        }
     }
 
     val pulseAnimationValue by animateFloatAsState(
@@ -109,6 +153,17 @@ fun MapComponent(
 
     val cameraPositionState = rememberCameraPositionState {
         position = initialCameraPosition
+    }
+
+    LaunchedEffect(focusOnLocationRequested) {
+        if (focusOnLocationRequested && currentUserLocation != null) {
+            cameraPositionState.animate(
+                CameraUpdateFactory.newLatLngZoom(
+                    currentUserLocation!!,
+                    15f // Zoom level
+                )
+            )
+        }
     }
 
     val uiSettings by remember {
@@ -210,6 +265,29 @@ fun MapComponent(
                     shape = CircleShape,
                     color = MaterialTheme.colorScheme.primary
                 ) {}
+            }
+        }
+
+        if (hasLocationPermission) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                contentAlignment = Alignment.BottomEnd
+            ) {
+                FloatingActionButton(
+                    onClick = {
+                        if (currentUserLocation != null) {
+                            onMyLocationClick()
+                        }
+                    },
+                    modifier = Modifier.padding(bottom = 80.dp)
+                ) {
+                    Icon(
+                        Icons.Default.MyLocation,
+                        contentDescription = "My Location"
+                    )
+                }
             }
         }
     }
