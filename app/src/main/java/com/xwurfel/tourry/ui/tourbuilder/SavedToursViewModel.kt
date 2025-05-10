@@ -50,7 +50,6 @@ class SavedToursViewModel @Inject constructor(
 
             repository.deleteTour(tourId).fold(
                 onSuccess = {
-                    // Remove the deleted tour from the list
                     val updatedTours = _state.value.tours.filter { it.id != tourId }
                     _state.value = _state.value.copy(
                         isLoading = false,

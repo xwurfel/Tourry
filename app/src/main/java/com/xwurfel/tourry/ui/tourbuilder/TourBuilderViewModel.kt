@@ -25,6 +25,7 @@ data class TourBuilderState(
     val isLoading: Boolean = false,
     val tourDraft: TourDraft = TourDraft(),
     val selectedWaypointId: String? = null,
+    val selectedContentId: String? = null,
     val routeInfo: RouteInfo? = null,
     val isEditingWaypoint: Boolean = false,
     val isEditingContent: Boolean = false,
@@ -32,7 +33,8 @@ data class TourBuilderState(
     val operationSuccess: String? = null,
     val uploadInProgress: Boolean = false,
     val saveInProgress: Boolean = false,
-    val isMapReady: Boolean = false
+    val isMapReady: Boolean = false,
+    val currentLocation: LatLng? = null
 )
 
 @HiltViewModel
@@ -64,7 +66,7 @@ class TourBuilderViewModel @Inject constructor(
     fun loadTourDraft(tourId: String) {
         viewModelScope.launch {
             _state.value = _state.value.copy(isLoading = true, error = null)
-            
+
             repository.getTourDraft(tourId).fold(
                 onSuccess = { tourDraft ->
                     _state.value = _state.value.copy(
@@ -105,7 +107,7 @@ class TourBuilderViewModel @Inject constructor(
             isPublic = isPublic ?: currentDraft.isPublic,
             highlights = highlights ?: currentDraft.highlights
         )
-        
+
         _state.value = _state.value.copy(tourDraft = updatedDraft)
         saveDraftLocally()
     }
@@ -113,22 +115,22 @@ class TourBuilderViewModel @Inject constructor(
     fun addWaypoint(position: LatLng) {
         val currentDraft = _state.value.tourDraft
         val newOrder = currentDraft.waypoints.size
-        
+
         val newWaypoint = WaypointDraft(
             id = UUID.randomUUID().toString(), // Temporary ID until saved on the server
             position = position,
             order = newOrder,
             title = "Waypoint ${newOrder + 1}"
         )
-        
+
         val updatedWaypoints = currentDraft.waypoints + newWaypoint
         val updatedDraft = currentDraft.copy(waypoints = updatedWaypoints)
-        
+
         _state.value = _state.value.copy(
             tourDraft = updatedDraft,
             selectedWaypointId = newWaypoint.id
         )
-        
+
         calculateRoute()
         saveDraftLocally()
     }
@@ -143,9 +145,9 @@ class TourBuilderViewModel @Inject constructor(
     ) {
         val currentDraft = _state.value.tourDraft
         val waypointIndex = currentDraft.waypoints.indexOfFirst { it.id == waypointId }
-        
+
         if (waypointIndex == -1) return
-        
+
         val currentWaypoint = currentDraft.waypoints[waypointIndex]
         val updatedWaypoint = currentWaypoint.copy(
             title = title ?: currentWaypoint.title,
@@ -154,22 +156,22 @@ class TourBuilderViewModel @Inject constructor(
             durationMinutes = durationMinutes ?: currentWaypoint.durationMinutes,
             geofenceRadius = geofenceRadius ?: currentWaypoint.geofenceRadius
         )
-        
+
         val updatedWaypoints = currentDraft.waypoints.toMutableList().apply {
             set(waypointIndex, updatedWaypoint)
         }
-        
+
         val updatedDraft = currentDraft.copy(waypoints = updatedWaypoints)
-        
+
         _state.value = _state.value.copy(
             tourDraft = updatedDraft,
             isEditingWaypoint = false
         )
-        
+
         if (position != null) {
             calculateRoute()
         }
-        
+
         saveDraftLocally()
     }
 
@@ -177,14 +179,14 @@ class TourBuilderViewModel @Inject constructor(
         val currentDraft = _state.value.tourDraft
         val updatedWaypoints = currentDraft.waypoints.filter { it.id != waypointId }
             .mapIndexed { index, waypoint -> waypoint.copy(order = index) }
-        
+
         val updatedDraft = currentDraft.copy(waypoints = updatedWaypoints)
-        
+
         _state.value = _state.value.copy(
             tourDraft = updatedDraft,
             selectedWaypointId = null
         )
-        
+
         calculateRoute()
         saveDraftLocally()
     }
@@ -192,23 +194,22 @@ class TourBuilderViewModel @Inject constructor(
     fun reorderWaypoints(fromIndex: Int, toIndex: Int) {
         val currentDraft = _state.value.tourDraft
         val waypoints = currentDraft.waypoints.toMutableList()
-        
+
         if (fromIndex < 0 || fromIndex >= waypoints.size || toIndex < 0 || toIndex >= waypoints.size) {
             return
         }
-        
+
         val waypointToMove = waypoints.removeAt(fromIndex)
         waypoints.add(toIndex, waypointToMove)
-        
-        // Update order property
+
         val reorderedWaypoints = waypoints.mapIndexed { index, waypoint ->
             waypoint.copy(order = index)
         }
-        
+
         val updatedDraft = currentDraft.copy(waypoints = reorderedWaypoints)
-        
+
         _state.value = _state.value.copy(tourDraft = updatedDraft)
-        
+
         calculateRoute()
         saveDraftLocally()
     }
@@ -222,12 +223,12 @@ class TourBuilderViewModel @Inject constructor(
     ) {
         val currentDraft = _state.value.tourDraft
         val waypointIndex = currentDraft.waypoints.indexOfFirst { it.id == waypointId }
-        
+
         if (waypointIndex == -1) return
-        
+
         val waypoint = currentDraft.waypoints[waypointIndex]
         val newOrder = waypoint.contents.size
-        
+
         val newContent = ContentDraft(
             id = UUID.randomUUID().toString(), // Temporary ID until saved on the server
             title = title,
@@ -236,21 +237,21 @@ class TourBuilderViewModel @Inject constructor(
             mediaUrl = mediaUrl,
             order = newOrder
         )
-        
+
         val updatedContents = waypoint.contents + newContent
         val updatedWaypoint = waypoint.copy(contents = updatedContents)
-        
+
         val updatedWaypoints = currentDraft.waypoints.toMutableList().apply {
             set(waypointIndex, updatedWaypoint)
         }
-        
+
         val updatedDraft = currentDraft.copy(waypoints = updatedWaypoints)
-        
+
         _state.value = _state.value.copy(
             tourDraft = updatedDraft,
             isEditingContent = false
         )
-        
+
         saveDraftLocally()
     }
 
@@ -264,14 +265,14 @@ class TourBuilderViewModel @Inject constructor(
     ) {
         val currentDraft = _state.value.tourDraft
         val waypointIndex = currentDraft.waypoints.indexOfFirst { it.id == waypointId }
-        
+
         if (waypointIndex == -1) return
-        
+
         val waypoint = currentDraft.waypoints[waypointIndex]
         val contentIndex = waypoint.contents.indexOfFirst { it.id == contentId }
-        
+
         if (contentIndex == -1) return
-        
+
         val content = waypoint.contents[contentIndex]
         val updatedContent = content.copy(
             title = title ?: content.title,
@@ -279,46 +280,58 @@ class TourBuilderViewModel @Inject constructor(
             type = type ?: content.type,
             mediaUrl = mediaUrl ?: content.mediaUrl
         )
-        
+
         val updatedContents = waypoint.contents.toMutableList().apply {
             set(contentIndex, updatedContent)
         }
-        
+
         val updatedWaypoint = waypoint.copy(contents = updatedContents)
         val updatedWaypoints = currentDraft.waypoints.toMutableList().apply {
             set(waypointIndex, updatedWaypoint)
         }
-        
+
         val updatedDraft = currentDraft.copy(waypoints = updatedWaypoints)
-        
+
         _state.value = _state.value.copy(
             tourDraft = updatedDraft,
             isEditingContent = false
         )
-        
+
         saveDraftLocally()
     }
 
     fun deleteContent(waypointId: String, contentId: String) {
         val currentDraft = _state.value.tourDraft
         val waypointIndex = currentDraft.waypoints.indexOfFirst { it.id == waypointId }
-        
+
         if (waypointIndex == -1) return
-        
+
         val waypoint = currentDraft.waypoints[waypointIndex]
         val updatedContents = waypoint.contents.filter { it.id != contentId }
             .mapIndexed { index, content -> content.copy(order = index) }
-        
+
         val updatedWaypoint = waypoint.copy(contents = updatedContents)
         val updatedWaypoints = currentDraft.waypoints.toMutableList().apply {
             set(waypointIndex, updatedWaypoint)
         }
-        
+
         val updatedDraft = currentDraft.copy(waypoints = updatedWaypoints)
-        
+
         _state.value = _state.value.copy(tourDraft = updatedDraft)
-        
+
         saveDraftLocally()
+    }
+
+    fun selectContent(contentId: String) {
+        val selectedWaypointId = _state.value.selectedWaypointId ?: return
+        val waypoint =
+            _state.value.tourDraft.waypoints.find { it.id == selectedWaypointId } ?: return
+        val content = waypoint.contents.find { it.id == contentId } ?: return
+
+        _state.value = _state.value.copy(
+            selectedContentId = contentId,
+            isEditingContent = true
+        )
     }
 
     fun uploadImage(file: File) {
@@ -327,14 +340,14 @@ class TourBuilderViewModel @Inject constructor(
                 uploadInProgress = true,
                 error = null
             )
-            
+
             repository.uploadImage(file).fold(
                 onSuccess = { url ->
                     _state.value = _state.value.copy(
                         uploadInProgress = false,
                         operationSuccess = "Image uploaded successfully"
                     )
-                    
+
                     // Add the image URL to the tour or selected waypoint
                     val selectedWaypointId = _state.value.selectedWaypointId
                     if (selectedWaypointId != null && _state.value.isEditingContent) {
@@ -354,7 +367,7 @@ class TourBuilderViewModel @Inject constructor(
                             imageUrls = updatedImageUrls,
                             thumbnailUrl = currentDraft.thumbnailUrl ?: url
                         )
-                        
+
                         _state.value = _state.value.copy(tourDraft = updatedDraft)
                         saveDraftLocally()
                     }
@@ -375,14 +388,14 @@ class TourBuilderViewModel @Inject constructor(
                 uploadInProgress = true,
                 error = null
             )
-            
+
             repository.uploadAudio(file).fold(
                 onSuccess = { url ->
                     _state.value = _state.value.copy(
                         uploadInProgress = false,
                         operationSuccess = "Audio uploaded successfully"
                     )
-                    
+
                     // We only add audio to waypoint content
                     val selectedWaypointId = _state.value.selectedWaypointId
                     if (selectedWaypointId != null) {
@@ -408,7 +421,7 @@ class TourBuilderViewModel @Inject constructor(
     fun saveTour() {
         viewModelScope.launch {
             val currentDraft = _state.value.tourDraft
-            
+
             // Validate tour data before saving
             if (currentDraft.title.isBlank()) {
                 _state.value = _state.value.copy(
@@ -416,25 +429,25 @@ class TourBuilderViewModel @Inject constructor(
                 )
                 return@launch
             }
-            
+
             if (currentDraft.waypoints.isEmpty()) {
                 _state.value = _state.value.copy(
                     error = "Tour must have at least one waypoint"
                 )
                 return@launch
             }
-            
+
             _state.value = _state.value.copy(
                 saveInProgress = true,
                 error = null
             )
-            
+
             val result = if (currentDraft.id == null) {
                 repository.createTour(currentDraft)
             } else {
                 repository.updateTour(currentDraft)
             }
-            
+
             result.fold(
                 onSuccess = { savedTour ->
                     _state.value = _state.value.copy(
@@ -459,7 +472,7 @@ class TourBuilderViewModel @Inject constructor(
     fun publishTour() {
         viewModelScope.launch {
             val currentDraft = _state.value.tourDraft
-            
+
             // Validate tour data before publishing
             if (currentDraft.title.isBlank()) {
                 _state.value = _state.value.copy(
@@ -467,41 +480,41 @@ class TourBuilderViewModel @Inject constructor(
                 )
                 return@launch
             }
-            
+
             if (currentDraft.description.isBlank()) {
                 _state.value = _state.value.copy(
                     error = "Tour description cannot be empty"
                 )
                 return@launch
             }
-            
+
             if (currentDraft.waypoints.isEmpty()) {
                 _state.value = _state.value.copy(
                     error = "Tour must have at least one waypoint"
                 )
                 return@launch
             }
-            
+
             if (currentDraft.thumbnailUrl == null) {
                 _state.value = _state.value.copy(
                     error = "Tour must have a thumbnail image"
                 )
                 return@launch
             }
-            
+
             val updatedDraft = currentDraft.copy(isPublic = true)
-            
+
             _state.value = _state.value.copy(
                 saveInProgress = true,
                 error = null
             )
-            
+
             val result = if (updatedDraft.id == null) {
                 repository.createTour(updatedDraft)
             } else {
                 repository.updateTour(updatedDraft)
             }
-            
+
             result.fold(
                 onSuccess = { savedTour ->
                     _state.value = _state.value.copy(
@@ -526,19 +539,19 @@ class TourBuilderViewModel @Inject constructor(
     fun deleteTour() {
         viewModelScope.launch {
             val currentDraft = _state.value.tourDraft
-            
+
             if (currentDraft.id == null) {
                 // Just clear the local draft
                 repository.clearLocalDraft()
                 _state.value = TourBuilderState()
                 return@launch
             }
-            
+
             _state.value = _state.value.copy(
                 isLoading = true,
                 error = null
             )
-            
+
             repository.deleteTour(currentDraft.id).fold(
                 onSuccess = {
                     _state.value = TourBuilderState(operationSuccess = "Tour deleted successfully")
@@ -558,17 +571,17 @@ class TourBuilderViewModel @Inject constructor(
         viewModelScope.launch {
             val currentDraft = _state.value.tourDraft
             val waypoints = currentDraft.waypoints
-            
+
             if (waypoints.size < 2) {
                 _state.update { it.copy(routeInfo = null) }
                 return@launch
             }
-            
+
             val positions = waypoints.sortedBy { it.order }.map { it.position }
-            
+
             repository.calculateRoute(positions).fold(
                 onSuccess = { routeInfo ->
-                    _state.update { 
+                    _state.update {
                         it.copy(
                             routeInfo = routeInfo,
                             tourDraft = it.tourDraft.copy(estimatedDuration = routeInfo.duration)
@@ -598,17 +611,24 @@ class TourBuilderViewModel @Inject constructor(
         )
     }
 
-    fun startEditingContent() {
+    fun startEditingExistingContent() {
         _state.value = _state.value.copy(
-            isEditingContent = true,
-            isEditingWaypoint = false
+            isEditingContent = true
         )
     }
 
     fun cancelEditing() {
         _state.value = _state.value.copy(
             isEditingWaypoint = false,
-            isEditingContent = false
+            isEditingContent = false,
+            selectedContentId = null
+        )
+    }
+
+    fun startEditingContent() {
+        _state.value = _state.value.copy(
+            isEditingContent = true,
+            isEditingWaypoint = false
         )
     }
 
@@ -627,5 +647,16 @@ class TourBuilderViewModel @Inject constructor(
         viewModelScope.launch {
             repository.saveDraftLocally(_state.value.tourDraft)
         }
+    }
+
+    fun updateCurrentLocation(location: LatLng) {
+        _state.value = _state.value.copy(
+            currentLocation = location
+        )
+    }
+
+    fun focusOnCurrentLocation() {
+        // This will be used from the UI when the user clicks on the "My Location" button
+        // The actual implementation would depend on how you're tracking location in your app
     }
 }

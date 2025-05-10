@@ -59,7 +59,6 @@ fun WaypointDetailPanel(
                 .fillMaxWidth()
                 .padding(16.dp)
         ) {
-            // Header with close button
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -75,7 +74,6 @@ fun WaypointDetailPanel(
                 }
             }
 
-            // Description
             if (waypoint.description.isNotBlank()) {
                 Text(
                     text = waypoint.description,
@@ -84,7 +82,6 @@ fun WaypointDetailPanel(
                 )
             }
 
-            // Duration and geofence info
             Row(
                 modifier = Modifier.padding(vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -122,7 +119,6 @@ fun WaypointDetailPanel(
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
-            // Content section header
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -143,7 +139,6 @@ fun WaypointDetailPanel(
                 }
             }
 
-            // Content list
             if (waypoint.contents.isEmpty()) {
                 Text(
                     text = "No content added yet. Add text, images, or audio narration to this waypoint.",

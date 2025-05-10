@@ -12,7 +12,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Info
@@ -56,8 +56,7 @@ import com.xwurfel.tourry.ui.tourbuilder.components.TourInfoEditor
 import com.xwurfel.tourry.ui.tourbuilder.components.WaypointDetailPanel
 import com.xwurfel.tourry.ui.tourbuilder.components.WaypointEditor
 import com.xwurfel.tourry.ui.tourbuilder.components.WaypointList
-import java.io.File
-import java.io.FileOutputStream
+import com.xwurfel.tourry.util.file.FileUtil
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalPermissionsApi::class)
 @Composable
@@ -93,14 +92,10 @@ fun TourBuilderScreen(
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
         uri?.let {
-            // Create a temporary file for the image
-            val file = File(context.cacheDir, "temp_image.jpg")
-            context.contentResolver.openInputStream(uri)?.use { input ->
-                FileOutputStream(file).use { output ->
-                    input.copyTo(output)
-                }
+            FileUtil.createTempFileFromUri(context, uri, "image")?.let { file ->
+                val compressedFile = FileUtil.compressImageIfNeeded(file)
+                viewModel.uploadImage(compressedFile)
             }
-            viewModel.uploadImage(file)
         }
     }
 
@@ -108,30 +103,22 @@ fun TourBuilderScreen(
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
         uri?.let {
-            // Create a temporary file for the audio
-            val file = File(context.cacheDir, "temp_audio.mp3")
-            context.contentResolver.openInputStream(uri)?.use { input ->
-                FileOutputStream(file).use { output ->
-                    input.copyTo(output)
-                }
+            FileUtil.createTempFileFromUri(context, uri, "audio")?.let { file ->
+                viewModel.uploadAudio(file)
             }
-            viewModel.uploadAudio(file)
         }
     }
 
-    // Detect when a tour has been successfully saved with an ID
     LaunchedEffect(state.operationSuccess, state.tourDraft.id) {
         if (state.operationSuccess?.contains("saved") == true ||
             state.operationSuccess?.contains("published") == true
         ) {
             state.tourDraft.id?.let { id ->
-                // Navigate to tour details
                 onNavigateToTourDetails(id)
             }
         }
     }
 
-    // SnackBar for errors and success messages
     val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(state.error, state.operationSuccess) {
@@ -165,7 +152,7 @@ fun TourBuilderScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
                 actions = {
@@ -259,34 +246,48 @@ fun TourBuilderScreen(
                             onDelete = { viewModel.deleteWaypoint(waypoint.id ?: "") }
                         )
                     }
-                }
-                // Show content editor when editing content
-                else if (state.isEditingContent && state.selectedWaypointId != null) {
-                    ContentEditor(
-                        content = null, // For new content
-                        onSave = { title, description, type, mediaUrl ->
-                            viewModel.addContent(
-                                waypointId = state.selectedWaypointId ?: "",
-                                title = title,
-                                description = description,
-                                type = type,
-                                mediaUrl = mediaUrl
-                            )
-                        },
-                        onCancel = { viewModel.cancelEditing() },
-                        onRequestMediaUpload = { contentType ->
-                            mediaContentType = contentType
-                            if (contentType == ContentType.IMAGE) {
-                                selectImageLauncher.launch("image/*")
-                            } else if (contentType == ContentType.AUDIO) {
-                                selectAudioLauncher.launch("audio/*")
+                } else if (state.isEditingContent && state.selectedWaypointId != null) {
+                    val waypoint =
+                        state.tourDraft.waypoints.firstOrNull { it.id == state.selectedWaypointId }
+                    if (waypoint != null) {
+                        val selectedContent = if (state.selectedContentId != null) {
+                            waypoint.contents.firstOrNull { it.id == state.selectedContentId }
+                        } else null
+
+                        ContentEditor(
+                            content = selectedContent,
+                            onSave = { title, description, type, mediaUrl ->
+                                if (selectedContent != null) {
+                                    viewModel.updateContent(
+                                        waypointId = state.selectedWaypointId!!,
+                                        contentId = selectedContent.id ?: "",
+                                        title = title,
+                                        description = description,
+                                        type = type,
+                                        mediaUrl = mediaUrl
+                                    )
+                                } else {
+                                    viewModel.addContent(
+                                        waypointId = state.selectedWaypointId!!,
+                                        title = title,
+                                        description = description,
+                                        type = type,
+                                        mediaUrl = mediaUrl
+                                    )
+                                }
+                            },
+                            onCancel = { viewModel.cancelEditing() },
+                            onRequestMediaUpload = { contentType ->
+                                mediaContentType = contentType
+                                if (contentType == ContentType.IMAGE) {
+                                    selectImageLauncher.launch("image/*")
+                                } else if (contentType == ContentType.AUDIO) {
+                                    selectAudioLauncher.launch("audio/*")
+                                }
                             }
-                        }
-                    )
-                }
-                // Show waypoint list when no editing is happening
-                else if (!state.isEditingWaypoint && !state.isEditingContent) {
-                    // Selected waypoint details panel
+                        )
+                    }
+                } else if (!state.isEditingWaypoint && !state.isEditingContent) {
                     if (state.selectedWaypointId != null) {
                         val waypoint =
                             state.tourDraft.waypoints.firstOrNull { it.id == state.selectedWaypointId }
@@ -296,15 +297,13 @@ fun TourBuilderScreen(
                                 onEdit = { viewModel.startEditingWaypoint() },
                                 onAddContent = { viewModel.startEditingContent() },
                                 onContentSelected = { contentId ->
-                                    // TODO: Show content details or edit existing content
+                                    viewModel.selectContent(contentId)
                                 },
                                 onClose = { viewModel.selectWaypoint(null) },
                                 modifier = Modifier.fillMaxWidth()
                             )
                         }
-                    }
-                    // Show waypoint list when nothing is selected
-                    else {
+                    } else {
                         WaypointList(
                             waypoints = state.tourDraft.waypoints,
                             selectedWaypointId = state.selectedWaypointId,
@@ -322,7 +321,6 @@ fun TourBuilderScreen(
                 }
             }
 
-            // Loading indicator
             if (state.isLoading || state.uploadInProgress || state.saveInProgress) {
                 Box(
                     modifier = Modifier
