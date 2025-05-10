@@ -116,7 +116,13 @@ dependencies {
     // Firebase
     implementation(libs.firebase.bom)
 
+    //Datastore
+    implementation(libs.androidx.datastore.preferences)
+
     implementation(libs.kotlinx.coroutines.play.services)
+
+    implementation(libs.reorderable)
+
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

@@ -1,5 +1,8 @@
 package com.xwurfel.tourry.core.network.di
 
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import com.xwurfel.tourry.core.network.interceptor.AuthInterceptor
 import com.xwurfel.tourry.core.network.interceptor.NetworkConnectivityInterceptor
 import dagger.Module
 import dagger.Provides
@@ -15,13 +18,21 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 object NetworkModule {
+
+    @Provides
+    @Singleton
+    fun provideAuthInterceptor(dataStore: DataStore<Preferences>): AuthInterceptor {
+        return AuthInterceptor(dataStore)
+    }
+
     @Provides
     @Singleton
     fun provideOkHttpClient(
-        networkConnectivityInterceptor: NetworkConnectivityInterceptor
+        networkConnectivityInterceptor: NetworkConnectivityInterceptor,
+        authInterceptor: AuthInterceptor
     ): OkHttpClient {
         return OkHttpClient.Builder()
-            // TODO: add auth interceptor
+            .addInterceptor(authInterceptor)
             .addInterceptor(networkConnectivityInterceptor)
             .addInterceptor(HttpLoggingInterceptor().apply {
                 level = HttpLoggingInterceptor.Level.BODY
@@ -35,8 +46,8 @@ object NetworkModule {
     @Singleton
     fun provideRetrofit(okHttpClient: OkHttpClient): Retrofit {
         return Retrofit.Builder()
-            // TODO: add base url
-            .baseUrl("")
+            // TODO: Add base url
+            .baseUrl("https://api.tourry.com/v1/")
             .client(okHttpClient)
             .addConverterFactory(GsonConverterFactory.create())
             .build()
