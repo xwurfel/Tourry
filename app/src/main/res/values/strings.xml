@@ -14,4 +14,37 @@
     <string name="regroup_text">The guide of %1$s has requested everyone to regroup</string>
     <string name="error_no_internet_connection">Sorry, no internet connection!</string>
     <string name="error_server_failed_to_respond">Sorry, server failded to respond!</string>
+
+    <!-- Navigation -->
+    <string name="nav_explore">Explore</string>
+    <string name="nav_my_tours">My Tours</string>
+    <string name="nav_profile">Profile</string>
+
+    <!-- Explore Screen -->
+    <string name="create_tour">Create Tour</string>
+    <string name="switch_to_list">Switch to List</string>
+    <string name="switch_to_map">Switch to Map</string>
+    <string name="search_tours">Search tours…</string>
+
+    <!-- Tour Creation -->
+    <string name="tour_creation_title">Create New Tour</string>
+    <string name="step_basic_info">Basic Info</string>
+    <string name="step_stops">Stops</string>
+    <string name="step_schedule">Schedule</string>
+    <string name="step_preview">Preview</string>
+
+    <!-- My Tours -->
+    <string name="tab_joined">Joined</string>
+    <string name="tab_created">Created</string>
+    <string name="participants_count">%d participants</string>
+
+    <!-- Common -->
+    <string name="next">Next</string>
+    <string name="previous">Previous</string>
+    <string name="publish">Publish</string>
+    <string name="cancel">Cancel</string>
+    <string name="edit">Edit</string>
+    <string name="join">Join</string>
+    <string name="free">Free</string>
+    <string name="live_soon">LIVE soon</string>
 </resources>

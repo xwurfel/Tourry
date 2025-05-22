@@ -11,6 +11,12 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navOptions
+import com.xwurfel.tourry.ui.navigation.authRoute
+import com.xwurfel.tourry.ui.navigation.exploreRoute
+import com.xwurfel.tourry.ui.navigation.liveTourRouteWithArgs
+import com.xwurfel.tourry.ui.navigation.myToursRoute
+import com.xwurfel.tourry.ui.navigation.profileRoute
+import com.xwurfel.tourry.ui.navigation.tourSummaryRouteWithArgs
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.WhileSubscribed
@@ -46,8 +52,11 @@ class TourryAppState(
         @Composable get() = navController
             .currentBackStackEntryAsState().value?.destination
 
-    val shouldShowNavigation
+    val shouldShowNavigation: Boolean
         @Composable get() = when (currentDestination?.route) {
+            authRoute -> false
+            liveTourRouteWithArgs -> false
+            tourSummaryRouteWithArgs -> false
             else -> true
         }
 
@@ -61,45 +70,31 @@ class TourryAppState(
             return windowSizeClass.widthSizeClass != WindowWidthSizeClass.Compact && shouldShowNavigation
         }
 
-    // TODO: replace with your own start destination
     val startDestination = flow<String> {
-        // emit start destination here
-
+        // TODO: Check if user is authenticated
+        // For now, always start with explore
+        emit(exploreRoute)
     }.stateIn(
         coroutineScope,
         SharingStarted.WhileSubscribed(5.seconds),
-        initialValue = ""
+        initialValue = exploreRoute
     )
 
-    /**
-     * Map of top level destinations to be used in the BottomBar and NavRail. The key is the route.
-     */
     val topLevelDestinations: List<TopLevelDestination> = TopLevelDestination.entries
 
-    /**
-     * UI logic for navigating to a top level destination in the app. Top level destinations have
-     * only one copy of the destination of the back stack, and save and restore state whenever you
-     * navigate to and from it.
-     *
-     * @param topLevelDestination: The destination the app needs to navigate to.
-     */
     fun navigateToTopLevelDestination(topLevelDestination: TopLevelDestination) {
         val topLevelNavOptions = navOptions {
-            // Pop up to the start destination of the graph to
-            // avoid building up a large stack of destinations
-            // on the back stack as users select items
-//            popUpTo(firstRoute) {
-//                saveState = true
-//            }
-            // Avoid multiple copies of the same destination when
-            // reselecting the same item
+            popUpTo(navController.graph.startDestinationId) {
+                saveState = true
+            }
             launchSingleTop = true
-            // Restore state when reselecting a previously selected item
             restoreState = true
         }
 
-//        when (topLevelDestination) {
-//
-//        }
+        when (topLevelDestination) {
+            TopLevelDestination.EXPLORE -> navController.navigate(exploreRoute, topLevelNavOptions)
+            TopLevelDestination.MY_TOURS -> navController.navigate(myToursRoute, topLevelNavOptions)
+            TopLevelDestination.PROFILE -> navController.navigate(profileRoute, topLevelNavOptions)
+        }
     }
 }
