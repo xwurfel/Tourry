@@ -63,6 +63,9 @@ dependencies {
     implementation(libs.androidx.material.icons.extended)
     implementation(libs.androidx.core.splashscreen)
     implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.androidx.window)
+    implementation(libs.androidx.material3.window.size.class1)
+
 
     // Serialization
     implementation(libs.kotlinx.serialization.json)
@@ -106,12 +109,17 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.logging.interceptor)
 
+    implementation(libs.retrofit2.kotlinx.serialization.converter)
+
     // Encryption
     implementation(libs.androidx.security.state)
     implementation(libs.androidx.security.crypto)
 
     // WorkManager
     implementation(libs.androidx.work.runtime.ktx)
+
+    // Logging
+    implementation(libs.timber)
 
     // Firebase
     implementation(platform(libs.firebase.bom))

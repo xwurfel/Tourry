@@ -28,6 +28,7 @@ hilt-version = "2.51.1"
 okhttp = "4.12.0"
 reorderable = "0.9.6"
 retrofit = "2.9.0"
+retrofit2KotlinxSerializationConverter = "1.0.0"
 roomRuntime = "2.7.1"
 securityCrypto = "1.1.0-alpha07"
 securityState = "1.0.0-beta01"
@@ -35,7 +36,9 @@ serialization = "1.6.3"
 playServicesLocation = "21.3.0"
 roomCommon = "2.7.1"
 roomKtx = "2.7.1"
+timber = "5.0.1"
 uiTextGoogleFonts = "1.8.0"
+window = "1.4.0"
 workRuntimeKtx = "2.10.1"
 
 
@@ -47,11 +50,13 @@ androidx-datastore-preferences = { module = "androidx.datastore:datastore-prefer
 androidx-hilt-navigation-compose = { module = "androidx.hilt:hilt-navigation-compose", version.ref = "hiltNavigationCompose" }
 androidx-lifecycle-service = { module = "androidx.lifecycle:lifecycle-service", version.ref = "lifecycleService" }
 androidx-material-icons-extended = { module = "androidx.compose.material:material-icons-extended" }
+androidx-material3-window-size-class1 = { module = "androidx.compose.material3:material3-window-size-class" }
 androidx-room-compiler = { module = "androidx.room:room-compiler", version.ref = "roomRuntime" }
 androidx-room-runtime = { module = "androidx.room:room-runtime", version.ref = "roomRuntime" }
 androidx-security-crypto = { module = "androidx.security:security-crypto", version.ref = "securityCrypto" }
 androidx-security-state = { module = "androidx.security:security-state", version.ref = "securityState" }
 androidx-ui-text-google-fonts = { module = "androidx.compose.ui:ui-text-google-fonts", version.ref = "uiTextGoogleFonts" }
+androidx-window = { module = "androidx.window:window", version.ref = "window" }
 androidx-work-runtime-ktx = { module = "androidx.work:work-runtime-ktx", version.ref = "workRuntimeKtx" }
 coil-compose = { module = "io.coil-kt:coil-compose", version.ref = "coilCompose" }
 converter-gson = { module = "com.squareup.retrofit2:converter-gson", version.ref = "converterGson" }
@@ -89,6 +94,8 @@ androidx-room-common = { group = "androidx.room", name = "room-common", version.
 androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "roomKtx" }
 reorderable = { module = "org.burnoutcrew.composereorderable:reorderable", version.ref = "reorderable" }
 retrofit = { module = "com.squareup.retrofit2:retrofit", version.ref = "retrofit" }
+retrofit2-kotlinx-serialization-converter = { module = "com.jakewharton.retrofit:retrofit2-kotlinx-serialization-converter", version.ref = "retrofit2KotlinxSerializationConverter" }
+timber = { module = "com.jakewharton.timber:timber", version.ref = "timber" }
 
 
 [plugins]

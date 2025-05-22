@@ -12,4 +12,6 @@
     <string name="geofence_exit_text">Please return to the guide to stay with the group</string>
     <string name="regroup_title">Time to regroup!</string>
     <string name="regroup_text">The guide of %1$s has requested everyone to regroup</string>
+    <string name="error_no_internet_connection">Sorry, no internet connection!</string>
+    <string name="error_server_failed_to_respond">Sorry, server failded to respond!</string>
 </resources>
