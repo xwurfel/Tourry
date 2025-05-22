@@ -5,6 +5,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStore
 import com.xwurfel.tourry.feature.auth.api.AuthApi
+import com.xwurfel.tourry.feature.auth.api.AuthApi2
 import com.xwurfel.tourry.feature.auth.data.repository.AuthRepositoryImpl
 import com.xwurfel.tourry.feature.auth.domain.repository.AuthRepository
 import dagger.Module
@@ -36,7 +37,7 @@ object AuthModule {
     @Provides
     @Singleton
     fun provideAuthRepository(
-        authApi: AuthApi,
+        authApi: AuthApi2,
         dataStore: DataStore<Preferences>
     ): AuthRepository {
         return AuthRepositoryImpl(authApi, dataStore)

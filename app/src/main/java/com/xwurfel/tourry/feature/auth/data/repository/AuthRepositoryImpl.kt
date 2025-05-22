@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.xwurfel.tourry.core.network.interceptor.NoConnectivityException
 import com.xwurfel.tourry.feature.auth.api.AuthApi
+import com.xwurfel.tourry.feature.auth.api.AuthApi2
 import com.xwurfel.tourry.feature.auth.api.model.LoginRequest
 import com.xwurfel.tourry.feature.auth.api.model.RegisterRequest
 import com.xwurfel.tourry.feature.auth.domain.model.User
@@ -16,7 +17,7 @@ import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 
 class AuthRepositoryImpl @Inject constructor(
-    private val authApi: AuthApi,
+    private val authApi: AuthApi2,
     private val dataStore: DataStore<Preferences>
 ) : AuthRepository {
 
@@ -34,7 +35,6 @@ class AuthRepositoryImpl @Inject constructor(
 
             if (response.isSuccessful) {
                 response.body()?.let { authResponse ->
-                    // Save auth token and user data
                     dataStore.edit { preferences ->
                         preferences[TOKEN_KEY] = authResponse.token
                         preferences[USER_ID_KEY] = authResponse.user.id
@@ -57,7 +57,7 @@ class AuthRepositoryImpl @Inject constructor(
             } else {
                 Result.failure(Exception("Login failed: ${response.code()} ${response.message()}"))
             }
-        } catch (e: NoConnectivityException) {
+        } catch (_: NoConnectivityException) {
             Result.failure(Exception("No internet connection. Please check your network and try again."))
         } catch (e: Exception) {
             Result.failure(e)

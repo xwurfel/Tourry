@@ -29,7 +29,7 @@ fun AppNavGraph(
             LoginScreen(
                 onNavigateToRegister = { navController.navigate(Routes.REGISTER) },
                 onLoginSuccess = {
-                    navController.navigate(Routes.HOME) {
+                    navController.navigate(Routes.TOUR_BUILDER_CREATE) {
                         popUpTo(Routes.LOGIN) { inclusive = true }
                     }
                 }
@@ -40,7 +40,7 @@ fun AppNavGraph(
             RegisterScreen(
                 onNavigateToLogin = { navController.navigate(Routes.LOGIN) },
                 onRegisterSuccess = {
-                    navController.navigate(Routes.HOME) {
+                    navController.navigate(Routes.TOUR_BUILDER_CREATE) {
                         popUpTo(Routes.AUTH) { inclusive = true }
                     }
                 }
