@@ -20,10 +20,14 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -34,6 +38,8 @@ import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.compose.GoogleMap
 import com.google.maps.android.compose.MapUiSettings
+import com.google.maps.android.compose.Marker
+import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.rememberCameraPositionState
 import com.xwurfel.tourry.R
 import com.xwurfel.tourry.core.extension.collectWithLifecycle
@@ -48,6 +54,7 @@ fun ExploreRoute(
     viewModel: ExploreViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val snackbarHostState = remember { SnackbarHostState() }
 
     viewModel.event.collectWithLifecycle { event ->
         when (event) {
@@ -56,9 +63,17 @@ fun ExploreRoute(
         }
     }
 
+    // Show snackbar for errors
+    LaunchedEffect(uiState.error) {
+        uiState.error?.let { error ->
+            snackbarHostState.showSnackbar(error)
+        }
+    }
+
     ExploreScreen(
         uiState = uiState,
-        onIntent = viewModel::acceptIntent
+        onIntent = viewModel::acceptIntent,
+        snackbarHostState = snackbarHostState
     )
 }
 
@@ -66,7 +81,8 @@ fun ExploreRoute(
 @Composable
 fun ExploreScreen(
     uiState: ExploreUiState,
-    onIntent: (ExploreIntent) -> Unit
+    onIntent: (ExploreIntent) -> Unit,
+    snackbarHostState: SnackbarHostState
 ) {
     Scaffold(
         topBar = {
@@ -90,7 +106,8 @@ fun ExploreScreen(
                 icon = { Icon(Icons.Default.Add, contentDescription = null) },
                 text = { Text(stringResource(R.string.create_tour)) }
             )
-        }
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { paddingValues ->
         Column(
             modifier = Modifier
@@ -117,57 +134,129 @@ fun ExploreScreen(
             Box(modifier = Modifier.fillMaxSize()) {
                 if (uiState.isMapMode) {
                     // Map View
-                    val cameraPositionState = rememberCameraPositionState {
-                        position = CameraPosition.fromLatLngZoom(
-                            LatLng(48.8566, 2.3522), // Default to Paris
-                            12f
-                        )
-                    }
-
-                    GoogleMap(
-                        modifier = Modifier.fillMaxSize(),
-                        cameraPositionState = cameraPositionState,
-                        uiSettings = MapUiSettings(
-                            zoomControlsEnabled = false,
-                            myLocationButtonEnabled = true
-                        )
-                    ) {
-                        // Add markers for tours
-                        uiState.tours.forEach { tour ->
-                            // TODO: Add actual tour location markers
-                        }
-                    }
+                    TourMapView(
+                        tours = uiState.tours,
+                        onTourClick = { tourId -> onIntent(ExploreIntent.TourClicked(tourId)) }
+                    )
                 } else {
-                    if (uiState.isLoading) {
+                    // List View
+                    TourListView(
+                        tours = uiState.tours,
+                        joinedTourIds = uiState.joinedTourIds,
+                        isLoading = uiState.isLoading,
+                        onTourClick = { tourId -> onIntent(ExploreIntent.TourClicked(tourId)) },
+                        onJoinTour = { tourId -> onIntent(ExploreIntent.JoinTour(tourId)) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun TourMapView(
+    tours: List<TourPreview>,
+    onTourClick: (String) -> Unit
+) {
+    val cameraPositionState = rememberCameraPositionState {
+        position = CameraPosition.fromLatLngZoom(
+            LatLng(48.8566, 2.3522), // Default to Paris
+            12f
+        )
+    }
+
+    GoogleMap(
+        modifier = Modifier.fillMaxSize(),
+        cameraPositionState = cameraPositionState,
+        uiSettings = MapUiSettings(
+            zoomControlsEnabled = false,
+            myLocationButtonEnabled = true
+        )
+    ) {
+        // Add markers for tours
+        tours.forEach { tour ->
+            // Use mock coordinates for now
+            Marker(
+                state = MarkerState(
+                    position = LatLng(
+                        48.8566 + (tours.indexOf(tour) * 0.01),
+                        2.3522 + (tours.indexOf(tour) * 0.01)
+                    )
+                ),
+                title = tour.title,
+                snippet = if (tour.isFree) "Free" else "$${tour.price.toInt()}",
+                onInfoWindowClick = { onTourClick(tour.id) }
+            )
+        }
+    }
+}
+
+@Composable
+fun TourListView(
+    tours: List<TourPreview>,
+    joinedTourIds: Set<String>,
+    isLoading: Boolean,
+    onTourClick: (String) -> Unit,
+    onJoinTour: (String) -> Unit
+) {
+    when {
+        isLoading && tours.isEmpty() -> {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator()
+            }
+        }
+
+        tours.isEmpty() -> {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "No tours found",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "Try adjusting your search or filters",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+
+        else -> {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                items(tours, key = { it.id }) { tour ->
+                    TourCard(
+                        tour = tour,
+                        onClick = { onTourClick(tour.id) },
+                        onJoinClick = onJoinTour,
+                        isJoined = tour.id in joinedTourIds,
+                        isJoining = false // TODO: Add joining state per tour
+                    )
+                }
+
+                if (isLoading) {
+                    item {
                         Box(
-                            modifier = Modifier.fillMaxSize(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             CircularProgressIndicator()
-                        }
-                    } else if (uiState.tours.isEmpty()) {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "No tours found",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    } else {
-                        LazyColumn(
-                            modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            items(uiState.tours) { tour ->
-                                TourCard(
-                                    tour = tour,
-                                    onClick = { onIntent(ExploreIntent.TourClicked(tour.id)) }
-                                )
-                            }
                         }
                     }
                 }

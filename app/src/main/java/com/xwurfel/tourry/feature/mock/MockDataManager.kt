@@ -6,18 +6,26 @@ import com.xwurfel.tourry.ui.tour.detail.TourGuide
 import com.xwurfel.tourry.ui.tour.detail.TourStopDetail
 import com.xwurfel.tourry.ui.tour.mine.MyTour
 import com.xwurfel.tourry.ui.tour.mine.TourStatus
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.random.Random
 
 /**
- * Simple in-memory data manager to simulate backend functionality
- * This helps connect features together without implementing actual repositories
+ * Enhanced MockDataManager that simulates realistic backend functionality
+ * with proper data updates and state management
  */
 @Singleton
 class MockDataManager @Inject constructor() {
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     // In-memory storage
     private val _availableTours = MutableStateFlow(generateInitialTours())
@@ -36,6 +44,15 @@ class MockDataManager @Inject constructor() {
     private val _currentUserId = MutableStateFlow<String?>(null)
     val currentUserId: StateFlow<String?> = _currentUserId.asStateFlow()
 
+    // Live tour simulation
+    private val _liveTours = MutableStateFlow<Set<String>>(emptySet())
+    val liveTours: StateFlow<Set<String>> = _liveTours.asStateFlow()
+
+    init {
+        startLiveTourSimulation()
+        startDynamicDataUpdates()
+    }
+
     fun getTourDetail(tourId: String): TourDetail? {
         return when (tourId) {
             "1" -> createTourDetail1()
@@ -43,54 +60,81 @@ class MockDataManager @Inject constructor() {
             "3" -> createTourDetail3()
             "4" -> createTourDetail4()
             "5" -> createTourDetail5()
-            else -> createDefaultTourDetail(tourId)
+            else -> {
+                // Check if it's a user-created tour
+                val createdTour = _createdTours.value.find { it.id == tourId }
+                if (createdTour != null) {
+                    createDefaultTourDetail(tourId)
+                } else {
+                    null
+                }
+            }
         }
     }
 
-    fun joinTour(tourId: String): Boolean {
-        val currentJoined = _joinedTourIds.value.toMutableSet()
-        currentJoined.add(tourId)
-        _joinedTourIds.value = currentJoined
+    suspend fun joinTour(tourId: String): Boolean {
+        // Simulate network delay
+        delay(500)
 
-        // Update spots left in available tours
-        val updatedTours = _availableTours.value.map { tour ->
-            if (tour.id == tourId) {
-                tour.copy() // In a real app, would decrease spots
-            } else tour
+        // Check if tour exists
+        val tourExists = _availableTours.value.any { it.id == tourId } ||
+                _createdTours.value.any { it.id == tourId }
+
+        if (!tourExists) return false
+
+        val currentJoined = _joinedTourIds.value.toMutableSet()
+        val wasAlreadyJoined = tourId in currentJoined
+
+        if (!wasAlreadyJoined) {
+            currentJoined.add(tourId)
+            _joinedTourIds.value = currentJoined
+
+            // Update spots left in available tours
+            updateTourSpots(tourId, -1)
+
+            // Simulate analytics tracking
+            println("Analytics: User joined tour $tourId")
         }
-        _availableTours.value = updatedTours
 
         return true
     }
 
     fun getJoinedTours(): List<MyTour> {
         val joinedIds = _joinedTourIds.value
+        val currentTime = System.currentTimeMillis()
+
         return _availableTours.value
             .filter { it.id in joinedIds }
             .map { tour ->
+                val status = when {
+                    tour.id in _liveTours.value -> TourStatus.LIVE
+                    tour.startTime > currentTime -> TourStatus.UPCOMING
+                    else -> TourStatus.COMPLETED
+                }
+
                 MyTour(
                     id = tour.id,
                     title = tour.title,
                     coverImageUrl = tour.coverImageUrl,
                     startTime = tour.startTime,
-                    status = when {
-                        tour.isLiveSoon -> TourStatus.LIVE
-                        tour.startTime > System.currentTimeMillis() -> TourStatus.UPCOMING
-                        else -> TourStatus.COMPLETED
-                    },
-                    participantsCount = (5..15).random(),
-                    rating = if (tour.startTime < System.currentTimeMillis()) tour.rating else null
+                    status = status,
+                    participantsCount = Random.nextInt(3, 15),
+                    rating = if (status == TourStatus.COMPLETED)
+                        (4.0f + Random.nextFloat()).coerceAtMost(5.0f) else null
                 )
             }
     }
 
-    fun createTour(
+    suspend fun createTour(
         title: String,
         description: String,
         stops: List<Any>, // TourStop from creation
         startDateTime: Long?,
         price: Double
     ): String {
+        // Simulate network delay
+        delay(1000)
+
         val newTourId = "created_${System.currentTimeMillis()}"
 
         // Add to created tours
@@ -131,6 +175,12 @@ class MockDataManager @Inject constructor() {
     fun signIn(userId: String) {
         _isAuthenticated.value = true
         _currentUserId.value = userId
+
+        // Simulate loading some user data
+        scope.launch {
+            delay(500)
+            // Could load user's previous tours, favorites, etc.
+        }
     }
 
     fun signOut() {
@@ -139,7 +189,99 @@ class MockDataManager @Inject constructor() {
         _joinedTourIds.value = emptySet()
     }
 
+    suspend fun cancelTour(tourId: String): Boolean {
+        delay(300) // Simulate API call
+
+        val updatedCreatedTours = _createdTours.value.filterNot { it.id == tourId }
+        _createdTours.value = updatedCreatedTours
+
+        val updatedAvailableTours = _availableTours.value.filterNot { it.id == tourId }
+        _availableTours.value = updatedAvailableTours
+
+        return true
+    }
+
+    private fun updateTourSpots(tourId: String, delta: Int) {
+        val currentTours = _availableTours.value.toMutableList()
+        val tourIndex = currentTours.indexOfFirst { it.id == tourId }
+        if (tourIndex != -1) {
+            // Since TourPreview doesn't have spots, we'll simulate this differently
+            // In a real app, this would update the actual spots count
+            _availableTours.value = currentTours
+        }
+    }
+
+    private fun startLiveTourSimulation() {
+        scope.launch {
+            while (true) {
+                delay(30000) // Check every 30 seconds
+
+                val currentTime = System.currentTimeMillis()
+                val upcomingTours = _availableTours.value.filter { tour ->
+                    val timeDiff = tour.startTime - currentTime
+                    timeDiff in 0..1800000 // Tours starting within 30 minutes
+                }
+
+                val currentlyLive = _liveTours.value.toMutableSet()
+
+                // Add new live tours
+                upcomingTours.forEach { tour ->
+                    if (tour.id !in currentlyLive) {
+                        currentlyLive.add(tour.id)
+                        // Update tour to show as "live soon"
+                        updateTourLiveStatus(tour.id, true)
+                    }
+                }
+
+                // Remove tours that are no longer live (after 3 hours)
+                val toursToRemove = currentlyLive.filter { liveId ->
+                    val tour = _availableTours.value.find { it.id == liveId }
+                    tour?.let {
+                        currentTime - it.startTime > 10800000 // 3 hours
+                    } ?: true
+                }
+
+                toursToRemove.forEach { tourId ->
+                    currentlyLive.remove(tourId)
+                    updateTourLiveStatus(tourId, false)
+                }
+
+                _liveTours.value = currentlyLive
+            }
+        }
+    }
+
+    private fun updateTourLiveStatus(tourId: String, isLiveSoon: Boolean) {
+        val currentTours = _availableTours.value.map { tour ->
+            if (tour.id == tourId) {
+                tour.copy(isLiveSoon = isLiveSoon)
+            } else tour
+        }
+        _availableTours.value = currentTours
+    }
+
+    private fun startDynamicDataUpdates() {
+        scope.launch {
+            while (true) {
+                delay(60000) // Update every minute
+
+                // Simulate tour ratings and participant count changes
+                val updatedTours = _availableTours.value.map { tour ->
+                    // Slight rating fluctuations for realism
+                    val newRating = (tour.rating + (Random.nextFloat() - 0.5f) * 0.1f)
+                        .coerceIn(3.5f, 5.0f)
+
+                    tour.copy(rating = (newRating * 10).toInt() / 10.0f)
+                }
+
+                _availableTours.value = updatedTours
+            }
+        }
+    }
+
+    // Mock data generation methods remain the same...
     private fun generateInitialTours(): List<TourPreview> {
+        val currentTime = System.currentTimeMillis()
         return listOf(
             TourPreview(
                 id = "1",
@@ -150,7 +292,7 @@ class MockDataManager @Inject constructor() {
                 price = 25.0,
                 isFree = false,
                 isLiveSoon = false,
-                startTime = System.currentTimeMillis() + 3600000,
+                startTime = currentTime + 3600000, // 1 hour from now
                 duration = 120,
                 distance = 3.2f
             ),
@@ -163,7 +305,7 @@ class MockDataManager @Inject constructor() {
                 price = 0.0,
                 isFree = true,
                 isLiveSoon = true,
-                startTime = System.currentTimeMillis() + 1800000,
+                startTime = currentTime + 1800000, // 30 minutes from now
                 duration = 90,
                 distance = 2.1f
             ),
@@ -176,7 +318,7 @@ class MockDataManager @Inject constructor() {
                 price = 18.0,
                 isFree = false,
                 isLiveSoon = false,
-                startTime = System.currentTimeMillis() + 7200000,
+                startTime = currentTime + 7200000, // 2 hours from now
                 duration = 75,
                 distance = 1.8f
             ),
@@ -189,7 +331,7 @@ class MockDataManager @Inject constructor() {
                 price = 35.0,
                 isFree = false,
                 isLiveSoon = false,
-                startTime = System.currentTimeMillis() + 86400000,
+                startTime = currentTime + 86400000, // Tomorrow
                 duration = 150,
                 distance = 2.7f
             ),
@@ -202,7 +344,7 @@ class MockDataManager @Inject constructor() {
                 price = 22.0,
                 isFree = false,
                 isLiveSoon = false,
-                startTime = System.currentTimeMillis() + 172800000,
+                startTime = currentTime + 172800000, // Day after tomorrow
                 duration = 105,
                 distance = 4.1f
             )
@@ -210,12 +352,13 @@ class MockDataManager @Inject constructor() {
     }
 
     private fun generateInitialCreatedTours(): List<MyTour> {
+        val currentTime = System.currentTimeMillis()
         return listOf(
             MyTour(
                 id = "created_demo_1",
                 title = "My Secret Garden Tour",
                 coverImageUrl = null,
-                startTime = System.currentTimeMillis() + 7200000,
+                startTime = currentTime + 7200000, // 2 hours from now
                 status = TourStatus.UPCOMING,
                 participantsCount = 5,
                 rating = null
@@ -224,7 +367,7 @@ class MockDataManager @Inject constructor() {
                 id = "created_demo_2",
                 title = "Local Artisan Workshop",
                 coverImageUrl = null,
-                startTime = System.currentTimeMillis() - 172800000,
+                startTime = currentTime - 172800000, // 2 days ago
                 status = TourStatus.COMPLETED,
                 participantsCount = 8,
                 rating = 4.8f
@@ -232,6 +375,7 @@ class MockDataManager @Inject constructor() {
         )
     }
 
+    // Rest of the detailed tour creation methods remain the same as before...
     private fun createTourDetail1() = TourDetail(
         id = "1",
         title = "Hidden Gems of Paris",

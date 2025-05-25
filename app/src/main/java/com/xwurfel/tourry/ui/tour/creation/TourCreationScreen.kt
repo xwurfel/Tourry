@@ -1,15 +1,35 @@
 package com.xwurfel.tourry.ui.tour.creation
 
-import androidx.compose.animation.*
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -18,7 +38,10 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.xwurfel.tourry.R
 import com.xwurfel.tourry.core.extension.collectWithLifecycle
-import com.xwurfel.tourry.ui.tour.creation.steps.*
+import com.xwurfel.tourry.ui.tour.creation.steps.BasicInfoStep
+import com.xwurfel.tourry.ui.tour.creation.steps.PreviewStep
+import com.xwurfel.tourry.ui.tour.creation.steps.ScheduleStep
+import com.xwurfel.tourry.ui.tour.creation.steps.StopsStep
 
 @Composable
 fun TourCreationRoute(
@@ -52,7 +75,6 @@ fun TourCreationScreen(
         initialPage = uiState.currentStep,
         pageCount = { 4 }
     )
-    val coroutineScope = rememberCoroutineScope()
 
     LaunchedEffect(uiState.currentStep) {
         pagerState.animateScrollToPage(uiState.currentStep)
@@ -64,7 +86,7 @@ fun TourCreationScreen(
                 title = { Text(stringResource(R.string.tour_creation_title)) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 }
             )
@@ -103,13 +125,21 @@ fun TourCreationScreen(
                         description = uiState.description,
                         coverImageUri = uiState.coverImageUri,
                         onInfoChanged = { title, theme, description, imageUri ->
-                            onIntent(TourCreationIntent.UpdateBasicInfo(title, theme, description, imageUri))
+                            onIntent(
+                                TourCreationIntent.UpdateBasicInfo(
+                                    title,
+                                    theme,
+                                    description,
+                                    imageUri
+                                )
+                            )
                         }
                     )
+
                     1 -> StopsStep(
                         stops = uiState.stops,
                         onAddStop = { onIntent(TourCreationIntent.AddStop(it)) },
-                        onUpdateStop = { index, stop -> 
+                        onUpdateStop = { index, stop ->
                             onIntent(TourCreationIntent.UpdateStop(index, stop))
                         },
                         onRemoveStop = { onIntent(TourCreationIntent.RemoveStop(it)) },
@@ -117,6 +147,7 @@ fun TourCreationScreen(
                             onIntent(TourCreationIntent.ReorderStops(from, to))
                         }
                     )
+
                     2 -> ScheduleStep(
                         startDateTime = uiState.startDateTime,
                         price = uiState.price,
@@ -125,6 +156,7 @@ fun TourCreationScreen(
                             onIntent(TourCreationIntent.UpdateSchedule(dateTime, price, rule))
                         }
                     )
+
                     3 -> PreviewStep(
                         title = uiState.title,
                         theme = uiState.theme,

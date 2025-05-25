@@ -1,6 +1,5 @@
 package com.xwurfel.tourry.ui.tour.creation.steps
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,13 +9,15 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -43,10 +44,6 @@ import com.google.maps.android.compose.Marker
 import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.rememberCameraPositionState
 import com.xwurfel.tourry.ui.tour.creation.TourStop
-import org.burnoutcrew.reorderable.ReorderableItem
-import org.burnoutcrew.reorderable.detectReorderAfterLongPress
-import org.burnoutcrew.reorderable.rememberReorderableLazyListState
-import org.burnoutcrew.reorderable.reorderable
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -97,31 +94,22 @@ fun StopsStep(
         }
 
         // Stops list
-        val reorderableState = rememberReorderableLazyListState(
-            onMove = { from, to ->
-                onReorderStops(from.index, to.index)
-            }
-        )
-
         LazyColumn(
-            state = reorderableState.listState,
-            modifier = Modifier
-                .fillMaxSize()
-                .reorderable(reorderableState),
+            modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             itemsIndexed(stops, key = { _, item -> item.id }) { index, stop ->
-                ReorderableItem(reorderableState, key = stop.id) { isDragging ->
-                    StopCard(
-                        stop = stop,
-                        index = index,
-                        isDragging = isDragging,
-                        onEdit = { editingStopIndex = index },
-                        onRemove = { onRemoveStop(index) },
-                        modifier = Modifier.detectReorderAfterLongPress(reorderableState)
-                    )
-                }
+                StopCard(
+                    stop = stop,
+                    index = index,
+                    isFirst = index == 0,
+                    isLast = index == stops.lastIndex,
+                    onEdit = { editingStopIndex = index },
+                    onRemove = { onRemoveStop(index) },
+                    onMoveUp = { onReorderStops(index, index - 1) },
+                    onMoveDown = { onReorderStops(index, index + 1) }
+                )
             }
         }
     }
@@ -151,21 +139,17 @@ fun StopsStep(
 fun StopCard(
     stop: TourStop,
     index: Int,
-    isDragging: Boolean,
+    isFirst: Boolean,
+    isLast: Boolean,
     onEdit: () -> Unit,
     onRemove: () -> Unit,
+    onMoveUp: () -> Unit,
+    onMoveDown: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .background(
-                if (isDragging) MaterialTheme.colorScheme.surfaceVariant
-                else MaterialTheme.colorScheme.surface
-            ),
-        elevation = CardDefaults.cardElevation(
-            defaultElevation = if (isDragging) 8.dp else 2.dp
-        )
+        modifier = modifier.fillMaxWidth(),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Row(
             modifier = Modifier
@@ -173,12 +157,6 @@ fun StopCard(
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                Icons.Default.DragHandle,
-                contentDescription = "Drag handle",
-                modifier = Modifier.padding(end = 16.dp)
-            )
-
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     "${index + 1}. ${stop.name}",
@@ -189,6 +167,38 @@ fun StopCard(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+
+            // Reorder buttons
+            Column {
+                IconButton(
+                    onClick = onMoveUp,
+                    enabled = !isFirst,
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        Icons.Default.KeyboardArrowUp,
+                        contentDescription = "Move up",
+                        tint = if (isFirst)
+                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                        else
+                            MaterialTheme.colorScheme.onSurface
+                    )
+                }
+                IconButton(
+                    onClick = onMoveDown,
+                    enabled = !isLast,
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        Icons.Default.KeyboardArrowDown,
+                        contentDescription = "Move down",
+                        tint = if (isLast)
+                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                        else
+                            MaterialTheme.colorScheme.onSurface
+                    )
+                }
             }
 
             IconButton(onClick = onEdit) {

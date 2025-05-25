@@ -2,15 +2,17 @@ package com.xwurfel.tourry.ui.tour.summary
 
 import androidx.lifecycle.SavedStateHandle
 import com.xwurfel.tourry.core.ui.MviViewModel
+import com.xwurfel.tourry.feature.mock.MockDataManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import javax.inject.Inject
+import kotlin.random.Random
 
 @HiltViewModel
 class TourSummaryViewModel @Inject constructor(
-    savedStateHandle: SavedStateHandle
-    // TODO: Inject feedback and tour use cases
+    savedStateHandle: SavedStateHandle,
+    private val mockDataManager: MockDataManager
 ) : MviViewModel<TourSummaryUiState, TourSummaryPartialState, TourSummaryEvent, TourSummaryIntent>(
     initialState = TourSummaryUiState()
 ) {
@@ -27,7 +29,14 @@ class TourSummaryViewModel @Inject constructor(
         when (intent) {
             is TourSummaryIntent.SubmitRating -> {
                 emit(TourSummaryPartialState.RatingUpdated(intent.rating))
-                // TODO: Submit rating to repository
+                // TODO: Submit rating to repository via MockDataManager
+                try {
+                    kotlinx.coroutines.delay(500) // Simulate API call
+                    // Could add this to MockDataManager
+                    emit(TourSummaryPartialState.RatingSubmitted)
+                } catch (e: Exception) {
+                    emit(TourSummaryPartialState.Error("Failed to submit rating"))
+                }
             }
 
             is TourSummaryIntent.UpdateFeedback -> {
@@ -37,8 +46,8 @@ class TourSummaryViewModel @Inject constructor(
             is TourSummaryIntent.SubmitFeedback -> {
                 emit(TourSummaryPartialState.SubmittingFeedback)
                 try {
-                    // TODO: Submit feedback to repository
-                    kotlinx.coroutines.delay(1000) // Simulate network call
+                    kotlinx.coroutines.delay(1000) // Simulate API call
+                    // Could add feedback submission to MockDataManager
                     emit(TourSummaryPartialState.FeedbackSubmitted)
                 } catch (e: Exception) {
                     emit(TourSummaryPartialState.Error("Failed to submit feedback"))
@@ -48,6 +57,7 @@ class TourSummaryViewModel @Inject constructor(
             TourSummaryIntent.ShareTour -> {
                 // TODO: Implement sharing logic
                 // This could trigger a system share intent
+                emit(TourSummaryPartialState.TourShared)
             }
 
             TourSummaryIntent.NavigateHome -> {
@@ -61,17 +71,22 @@ class TourSummaryViewModel @Inject constructor(
         partialState: TourSummaryPartialState
     ): TourSummaryUiState {
         return when (partialState) {
-            TourSummaryPartialState.Loading -> previousState.copy(isLoading = true)
+            TourSummaryPartialState.Loading -> previousState.copy(isLoading = true, error = null)
 
             is TourSummaryPartialState.SummaryLoaded -> previousState.copy(
                 tourTitle = partialState.tourTitle,
                 tourCoverImage = partialState.coverImageUrl,
                 tourStats = partialState.stats,
-                isLoading = false
+                isLoading = false,
+                error = null
             )
 
             is TourSummaryPartialState.RatingUpdated -> previousState.copy(
                 userRating = partialState.rating
+            )
+
+            TourSummaryPartialState.RatingSubmitted -> previousState.copy(
+                isRatingSubmitted = true
             )
 
             is TourSummaryPartialState.FeedbackUpdated -> previousState.copy(
@@ -87,6 +102,10 @@ class TourSummaryViewModel @Inject constructor(
                 isFeedbackSubmitted = true
             )
 
+            TourSummaryPartialState.TourShared -> previousState.copy(
+                error = null // Could show a success message
+            )
+
             is TourSummaryPartialState.Error -> previousState.copy(
                 isLoading = false,
                 isSubmittingFeedback = false,
@@ -98,28 +117,51 @@ class TourSummaryViewModel @Inject constructor(
     private fun loadTourSummary(): Flow<TourSummaryPartialState> = flow {
         emit(TourSummaryPartialState.Loading)
         try {
-            // TODO: Load from repository
-            kotlinx.coroutines.delay(1000)
+            kotlinx.coroutines.delay(1000) // Simulate loading
 
-            // Mock data
-            val mockStats = TourStats(
-                durationMinutes = 87,
-                distanceKm = 2.3f,
-                stopsVisited = 5,
-                totalStops = 5,
-                completionPercentage = 1.0f
-            )
+            // Get tour details from MockDataManager
+            val tourDetail = mockDataManager.getTourDetail(tourId)
 
-            emit(
-                TourSummaryPartialState.SummaryLoaded(
-                    tourTitle = "Amazing City Walking Tour",
-                    coverImageUrl = null,
-                    stats = mockStats
+            if (tourDetail != null) {
+                // Generate realistic tour stats based on the tour
+                val mockStats = generateTourStats(tourDetail)
+
+                emit(
+                    TourSummaryPartialState.SummaryLoaded(
+                        tourTitle = tourDetail.title,
+                        coverImageUrl = tourDetail.coverImageUrl,
+                        stats = mockStats
+                    )
                 )
-            )
+            } else {
+                emit(TourSummaryPartialState.Error("Tour not found"))
+            }
         } catch (e: Exception) {
-            emit(TourSummaryPartialState.Error("Failed to load tour summary"))
+            emit(TourSummaryPartialState.Error("Failed to load tour summary: ${e.message}"))
         }
+    }
+
+    private fun generateTourStats(tourDetail: com.xwurfel.tourry.ui.tour.detail.TourDetail): TourStats {
+        // Generate realistic stats based on the tour data
+        val totalStops = tourDetail.stops.size
+        val stopsVisited =
+            Random.nextInt(totalStops - 1, totalStops + 1) // Most or all stops visited
+        val completionPercentage = stopsVisited.toFloat() / totalStops
+
+        // Duration with some variance (80-120% of planned duration)
+        val baseDuration = tourDetail.duration
+        val actualDuration = (baseDuration * (0.8f + Random.nextFloat() * 0.4f)).toInt()
+
+        // Distance with some variance
+        val actualDistance = tourDetail.distance * (0.9f + Random.nextFloat() * 0.2f)
+
+        return TourStats(
+            durationMinutes = actualDuration,
+            distanceKm = (actualDistance * 10).toInt() / 10.0f, // Round to 1 decimal
+            stopsVisited = stopsVisited,
+            totalStops = totalStops,
+            completionPercentage = completionPercentage
+        )
     }
 }
 
@@ -132,6 +174,7 @@ data class TourSummaryUiState(
     val userFeedback: String = "",
     val isSubmittingFeedback: Boolean = false,
     val isFeedbackSubmitted: Boolean = false,
+    val isRatingSubmitted: Boolean = false,
     val isLoading: Boolean = false,
     val error: String? = null
 )
@@ -145,9 +188,11 @@ sealed interface TourSummaryPartialState {
     ) : TourSummaryPartialState
 
     data class RatingUpdated(val rating: Int) : TourSummaryPartialState
+    object RatingSubmitted : TourSummaryPartialState
     data class FeedbackUpdated(val feedback: String) : TourSummaryPartialState
     object SubmittingFeedback : TourSummaryPartialState
     object FeedbackSubmitted : TourSummaryPartialState
+    object TourShared : TourSummaryPartialState
     data class Error(val message: String) : TourSummaryPartialState
 }
 

@@ -1,5 +1,9 @@
 package com.xwurfel.tourry.ui.explore.components
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,14 +19,23 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessTime
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
@@ -41,12 +54,18 @@ import java.util.Locale
 fun TourCard(
     tour: TourPreview,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onJoinClick: ((String) -> Unit)? = null,
+    isJoined: Boolean = false,
+    isJoining: Boolean = false
 ) {
+    var showQuickJoin by remember { mutableStateOf(false) }
+
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .clickable { onClick() },
+            .clickable { onClick() }
+            .animateContentSize(),
         shape = RoundedCornerShape(16.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
@@ -63,6 +82,7 @@ fun TourCard(
                     contentScale = ContentScale.Crop
                 )
 
+                // Top badges row
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -70,6 +90,7 @@ fun TourCard(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.Top
                 ) {
+                    // Live soon badge
                     if (tour.isLiveSoon) {
                         Surface(
                             color = MaterialTheme.colorScheme.error,
@@ -87,6 +108,7 @@ fun TourCard(
                         Spacer(modifier = Modifier.width(1.dp))
                     }
 
+                    // Price badge
                     Surface(
                         color = if (tour.isFree)
                             MaterialTheme.colorScheme.tertiary
@@ -107,6 +129,34 @@ fun TourCard(
                                 MaterialTheme.colorScheme.onPrimaryContainer,
                             fontWeight = FontWeight.Bold
                         )
+                    }
+                }
+
+                // Join status overlay
+                if (isJoined) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.9f),
+                        shape = RoundedCornerShape(bottomStart = 8.dp),
+                        modifier = Modifier.align(Alignment.TopEnd)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Check,
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp),
+                                tint = MaterialTheme.colorScheme.onPrimary
+                            )
+                            Text(
+                                "Joined",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
                 }
             }
@@ -136,6 +186,7 @@ fun TourCard(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
+                // Tour info
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -175,12 +226,86 @@ fun TourCard(
                         )
                     }
 
+                    // Start time
                     Text(
                         text = SimpleDateFormat("MMM d, HH:mm", Locale.getDefault())
                             .format(Date(tour.startTime)),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                }
+
+                // Quick join section
+                if (onJoinClick != null && !isJoined) {
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    AnimatedVisibility(
+                        visible = showQuickJoin,
+                        enter = slideInVertically(),
+                        exit = slideOutVertically()
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(
+                                "Join this tour?",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium
+                            )
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                OutlinedButton(
+                                    onClick = { showQuickJoin = false },
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text("Cancel")
+                                }
+
+                                Button(
+                                    onClick = { onJoinClick(tour.id) },
+                                    modifier = Modifier.weight(1f),
+                                    enabled = !isJoining
+                                ) {
+                                    if (isJoining) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(16.dp),
+                                            strokeWidth = 2.dp,
+                                            color = MaterialTheme.colorScheme.onPrimary
+                                        )
+                                    } else {
+                                        Text("Join")
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if (!showQuickJoin) {
+                        OutlinedButton(
+                            onClick = { showQuickJoin = true },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = MaterialTheme.colorScheme.primary
+                            )
+                        ) {
+                            Text("Quick Join")
+                        }
+                    }
+                }
+
+                // Already joined state
+                if (isJoined && tour.isLiveSoon) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Button(
+                        onClick = onClick,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary
+                        )
+                    ) {
+                        Text("Start Tour")
+                    }
                 }
             }
         }

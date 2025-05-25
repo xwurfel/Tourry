@@ -7,11 +7,29 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import com.xwurfel.tourry.ui.auth.AuthRoute
 import com.xwurfel.tourry.ui.explore.ExploreRoute
-import com.xwurfel.tourry.ui.navigation.*
+import com.xwurfel.tourry.ui.navigation.authRoute
+import com.xwurfel.tourry.ui.navigation.exploreRoute
+import com.xwurfel.tourry.ui.navigation.liveTourRoute
+import com.xwurfel.tourry.ui.navigation.liveTourRouteWithArgs
+import com.xwurfel.tourry.ui.navigation.myToursRoute
+import com.xwurfel.tourry.ui.navigation.profileRoute
+import com.xwurfel.tourry.ui.navigation.tourCreationRoute
+import com.xwurfel.tourry.ui.navigation.tourCreationRouteWithArgs
+import com.xwurfel.tourry.ui.navigation.tourDetailRoute
+import com.xwurfel.tourry.ui.navigation.tourDetailRouteWithArgs
+import com.xwurfel.tourry.ui.navigation.tourSummaryRoute
+import com.xwurfel.tourry.ui.navigation.tourSummaryRouteWithArgs
+import com.xwurfel.tourry.ui.profile.ProfileRoute
+import com.xwurfel.tourry.ui.tour.creation.TourCreationRoute
+import com.xwurfel.tourry.ui.tour.detail.TourDetailRoute
+import com.xwurfel.tourry.ui.tour.live.LiveTourRoute
+import com.xwurfel.tourry.ui.tour.mine.MyToursRoute
+import com.xwurfel.tourry.ui.tour.summary.TourSummaryRoute
 
 @Composable
-fun TemplateNavHost(
+fun TourryNavHost(
     appState: TourryAppState,
     modifier: Modifier = Modifier,
     startDestination: String = appState.startDestination.collectAsStateWithLifecycle().value,
@@ -54,12 +72,14 @@ fun TemplateNavHost(
         composable(profileRoute) {
             ProfileRoute(
                 onNavigateToAuth = {
-                    navController.navigate(authRoute)
+                    navController.navigate(authRoute) {
+                        popUpTo(profileRoute) { inclusive = false }
+                    }
                 }
             )
         }
 
-        // Other Destinations
+        // Auth flow
         composable(authRoute) {
             AuthRoute(
                 onAuthSuccess = {
@@ -68,6 +88,7 @@ fun TemplateNavHost(
             )
         }
 
+        // Tour Detail
         composable(
             route = tourDetailRouteWithArgs,
             arguments = listOf(navArgument("tourId") { type = NavType.StringType })
@@ -77,14 +98,18 @@ fun TemplateNavHost(
                 tourId = tourId,
                 onNavigateBack = { navController.popBackStack() },
                 onNavigateToLiveTour = {
-                    navController.navigate("$liveTourRoute/$tourId")
+                    navController.navigate("$liveTourRoute/$tourId") {
+                        popUpTo(tourDetailRoute) { inclusive = true }
+                    }
                 },
                 onNavigateToBooking = {
-                    // TODO: Implement booking flow
+                    // For now, just show the tour detail with joined state
+                    // In the future, this could navigate to a booking confirmation screen
                 }
             )
         }
 
+        // Tour Creation/Editing
         composable(
             route = tourCreationRouteWithArgs,
             arguments = listOf(
@@ -94,17 +119,20 @@ fun TemplateNavHost(
                     defaultValue = null
                 }
             )
-        ) {
+        ) { backStackEntry ->
+            val editingTourId = backStackEntry.arguments?.getString("tourId")
             TourCreationRoute(
                 onNavigateBack = { navController.popBackStack() },
                 onTourCreated = { tourId ->
+                    // Navigate to the newly created tour detail
                     navController.navigate("$tourDetailRoute/$tourId") {
-                        popUpTo(myToursRoute)
+                        popUpTo(exploreRoute) // Go back to explore after creation
                     }
                 }
             )
         }
 
+        // Live Tour Experience
         composable(
             route = liveTourRouteWithArgs,
             arguments = listOf(navArgument("tourId") { type = NavType.StringType })
@@ -117,10 +145,13 @@ fun TemplateNavHost(
                         popUpTo(liveTourRoute) { inclusive = true }
                     }
                 },
-                onNavigateBack = { navController.popBackStack() }
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
             )
         }
 
+        // Tour Summary & Feedback
         composable(
             route = tourSummaryRouteWithArgs,
             arguments = listOf(navArgument("tourId") { type = NavType.StringType })

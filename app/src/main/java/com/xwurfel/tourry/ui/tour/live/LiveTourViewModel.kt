@@ -7,6 +7,7 @@ import com.xwurfel.tourry.feature.geofencing.GeofenceEvent
 import com.xwurfel.tourry.feature.geofencing.GeofencingManager
 import com.xwurfel.tourry.feature.geofencing.TourStopGeofence
 import com.xwurfel.tourry.feature.location.service.LocationService
+import com.xwurfel.tourry.feature.mock.MockDataManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
@@ -17,8 +18,8 @@ import javax.inject.Inject
 class LiveTourViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     @ApplicationContext private val context: Context,
-    private val geofencingManager: GeofencingManager
-    // TODO: Inject tour use cases
+    private val geofencingManager: GeofencingManager,
+    private val mockDataManager: MockDataManager
 ) : MviViewModel<LiveTourUiState, LiveTourPartialState, LiveTourEvent, LiveTourIntent>(
     initialState = LiveTourUiState()
 ) {
@@ -28,7 +29,8 @@ class LiveTourViewModel @Inject constructor(
     init {
         observeContinuousChanges(
             loadTourData(),
-            observeGeofenceEvents()
+            observeGeofenceEvents(),
+            simulateLocationUpdates() // For mock purposes
         )
     }
 
@@ -42,21 +44,25 @@ class LiveTourViewModel @Inject constructor(
 
             LiveTourIntent.PauseTour -> {
                 emit(LiveTourPartialState.TourPaused)
-                // TODO: Pause location tracking
+                stopLocationService()
             }
 
             LiveTourIntent.ResumeTour -> {
                 emit(LiveTourPartialState.TourResumed)
-                // TODO: Resume location tracking
+                startLocationService()
             }
 
             LiveTourIntent.CompleteTour -> {
                 emit(LiveTourPartialState.TourCompleted)
+                stopLocationService()
+                geofencingManager.removeAllGeofences()
                 publishEvent(LiveTourEvent.TourCompleted)
             }
 
             LiveTourIntent.ExitTour -> {
                 emit(LiveTourPartialState.TourExited)
+                stopLocationService()
+                geofencingManager.removeAllGeofences()
                 publishEvent(LiveTourEvent.NavigateBack)
             }
 
@@ -75,6 +81,11 @@ class LiveTourViewModel @Inject constructor(
             is LiveTourIntent.LocationUpdated -> {
                 emit(LiveTourPartialState.LocationUpdated(intent.location))
             }
+
+            is LiveTourIntent.SimulateStopVisit -> {
+                // For testing purposes - simulate visiting a stop
+                emit(LiveTourPartialState.GeofenceEntered(intent.stopId))
+            }
         }
     }
 
@@ -83,12 +94,13 @@ class LiveTourViewModel @Inject constructor(
         partialState: LiveTourPartialState
     ): LiveTourUiState {
         return when (partialState) {
-            LiveTourPartialState.Loading -> previousState.copy(isLoading = true)
+            LiveTourPartialState.Loading -> previousState.copy(isLoading = true, error = null)
 
             is LiveTourPartialState.TourDataLoaded -> previousState.copy(
                 tourTitle = partialState.title,
                 tourStops = partialState.stops,
-                isLoading = false
+                isLoading = false,
+                error = null
             )
 
             LiveTourPartialState.LocationTrackingStarted -> previousState.copy(
@@ -117,17 +129,20 @@ class LiveTourViewModel @Inject constructor(
             is LiveTourPartialState.GeofenceEntered -> {
                 val updatedStops = previousState.tourStops.map { stop ->
                     if (stop.id == partialState.stopId) {
-                        stop.copy(isActive = true)
+                        stop.copy(isActive = true, isVisited = true)
                     } else {
                         stop.copy(isActive = false)
                     }
                 }
                 val stopIndex = updatedStops.indexOfFirst { it.id == partialState.stopId }
+                val visitedCount = updatedStops.count { it.isVisited }
+
                 previousState.copy(
                     tourStops = updatedStops,
                     currentStopIndex = if (stopIndex >= 0) stopIndex else previousState.currentStopIndex,
                     currentStop = updatedStops.find { it.id == partialState.stopId },
-                    progress = if (stopIndex >= 0) (stopIndex + 1).toFloat() / updatedStops.size else previousState.progress
+                    progress = visitedCount.toFloat() / updatedStops.size,
+                    visitedStopsCount = visitedCount
                 )
             }
 
@@ -163,52 +178,28 @@ class LiveTourViewModel @Inject constructor(
     private fun loadTourData(): Flow<LiveTourPartialState> = flow {
         emit(LiveTourPartialState.Loading)
         try {
-            // TODO: Load from repository
-            kotlinx.coroutines.delay(1000)
-
-            // Mock data
-            val mockStops = listOf(
-                LiveTourStop(
-                    id = "1",
-                    name = "Starting Point",
-                    latitude = 48.8566,
-                    longitude = 2.3522,
-                    geofenceRadius = 50f,
-                    content = StopContent(
-                        text = "Welcome to our amazing tour! This is where we begin our journey through the historic heart of the city.",
-                        imageUrl = null,
-                        audioUrl = null
+            val tourDetail = mockDataManager.getTourDetail(tourId)
+            if (tourDetail != null) {
+                val liveStops = tourDetail.stops.map { stop ->
+                    LiveTourStop(
+                        id = stop.id,
+                        name = stop.name,
+                        latitude = stop.latitude,
+                        longitude = stop.longitude,
+                        geofenceRadius = 50f,
+                        content = StopContent(
+                            text = stop.description,
+                            imageUrl = null, // Mock data doesn't have images yet
+                            audioUrl = null  // Mock data doesn't have audio yet
+                        )
                     )
-                ),
-                LiveTourStop(
-                    id = "2",
-                    name = "Historic Square",
-                    latitude = 48.8576,
-                    longitude = 2.3532,
-                    geofenceRadius = 50f,
-                    content = StopContent(
-                        text = "This beautiful square has been the center of city life for over 300 years. Notice the architectural details on the surrounding buildings.",
-                        imageUrl = null,
-                        audioUrl = null
-                    )
-                ),
-                LiveTourStop(
-                    id = "3",
-                    name = "Local Market",
-                    latitude = 48.8586,
-                    longitude = 2.3542,
-                    geofenceRadius = 50f,
-                    content = StopContent(
-                        text = "This vibrant market showcases the best of local produce and crafts. Feel free to explore and interact with the vendors.",
-                        imageUrl = null,
-                        audioUrl = null
-                    )
-                )
-            )
-
-            emit(LiveTourPartialState.TourDataLoaded("Amazing City Tour", mockStops))
+                }
+                emit(LiveTourPartialState.TourDataLoaded(tourDetail.title, liveStops))
+            } else {
+                emit(LiveTourPartialState.Error("Tour not found"))
+            }
         } catch (e: Exception) {
-            emit(LiveTourPartialState.Error("Failed to load tour data"))
+            emit(LiveTourPartialState.Error("Failed to load tour data: ${e.message}"))
         }
     }
 
@@ -222,6 +213,53 @@ class LiveTourViewModel @Inject constructor(
                 is GeofenceEvent.Exit -> {
                     emit(LiveTourPartialState.GeofenceExited(event.geofenceId))
                 }
+            }
+        }
+    }
+
+    // Mock location updates for testing
+    private fun simulateLocationUpdates(): Flow<LiveTourPartialState> = flow {
+        kotlinx.coroutines.delay(2000) // Wait for tour data to load
+
+        val stops = uiStateSnapshot.value.tourStops
+        if (stops.isNotEmpty()) {
+            // Start near the first stop
+            val firstStop = stops.first()
+            emit(
+                LiveTourPartialState.LocationUpdated(
+                    UserLocation(
+                        latitude = firstStop.latitude + 0.0001, // Slightly offset
+                        longitude = firstStop.longitude + 0.0001,
+                        accuracy = 10f
+                    )
+                )
+            )
+
+            // Simulate moving through stops every 30 seconds for demo
+            kotlinx.coroutines.delay(5000)
+            stops.forEach { stop ->
+                emit(
+                    LiveTourPartialState.LocationUpdated(
+                        UserLocation(
+                            latitude = stop.latitude,
+                            longitude = stop.longitude,
+                            accuracy = 5f
+                        )
+                    )
+                )
+
+                // Simulate entering the geofence
+                kotlinx.coroutines.delay(1000)
+                emit(LiveTourPartialState.GeofenceEntered(stop.id))
+
+                // Stay at stop for a bit
+                kotlinx.coroutines.delay(10000)
+
+                // Exit geofence
+                emit(LiveTourPartialState.GeofenceExited(stop.id))
+
+                // Move to next stop
+                kotlinx.coroutines.delay(5000)
             }
         }
     }
@@ -271,6 +309,7 @@ data class LiveTourUiState(
     val userLocation: UserLocation? = null,
     val tourStatus: TourStatus = TourStatus.ACTIVE,
     val progress: Float = 0f,
+    val visitedStopsCount: Int = 0,
     val isLocationEnabled: Boolean = false,
     val isLoading: Boolean = false,
     val error: String? = null
@@ -305,6 +344,7 @@ sealed interface LiveTourIntent {
     data class OnGeofenceEntered(val stopId: String) : LiveTourIntent
     data class OnGeofenceExited(val stopId: String) : LiveTourIntent
     data class LocationUpdated(val location: UserLocation) : LiveTourIntent
+    data class SimulateStopVisit(val stopId: String) : LiveTourIntent // For testing
 }
 
 sealed interface LiveTourEvent {
@@ -320,6 +360,7 @@ data class LiveTourStop(
     val longitude: Double,
     val geofenceRadius: Float = 50f, // meters
     val isActive: Boolean = false,
+    val isVisited: Boolean = false,
     val content: StopContent? = null
 )
 

@@ -109,7 +109,7 @@ fun TourryApp(
             )
 
             Column(Modifier.fillMaxSize()) {
-                TemplateNavHost(appState = appState)
+                TourryNavHost(appState = appState)
             }
         }
     }

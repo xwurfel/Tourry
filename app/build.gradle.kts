@@ -131,8 +131,6 @@ dependencies {
 
     implementation(libs.kotlinx.coroutines.play.services)
 
-    implementation(libs.reorderable)
-
     implementation(libs.androidx.lifecycle.service)
 
     testImplementation(libs.junit)
