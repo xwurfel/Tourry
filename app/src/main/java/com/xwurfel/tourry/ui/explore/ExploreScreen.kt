@@ -1,25 +1,45 @@
 package com.xwurfel.tourry.ui.explore
 
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Map
-import androidx.compose.material.icons.filled.ViewList
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.google.android.gms.maps.model.CameraPosition
+import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.compose.GoogleMap
 import com.google.maps.android.compose.MapUiSettings
 import com.google.maps.android.compose.rememberCameraPositionState
 import com.xwurfel.tourry.R
 import com.xwurfel.tourry.core.extension.collectWithLifecycle
+import com.xwurfel.tourry.ui.explore.components.ExploreFiltersBar
+import com.xwurfel.tourry.ui.explore.components.SearchBar
+import com.xwurfel.tourry.ui.explore.components.TourCard
 
 @Composable
 fun ExploreRoute(
@@ -55,7 +75,7 @@ fun ExploreScreen(
                 actions = {
                     IconButton(onClick = { onIntent(ExploreIntent.ToggleViewMode) }) {
                         Icon(
-                            imageVector = if (uiState.isMapMode) Icons.Default.ViewList else Icons.Default.Map,
+                            imageVector = if (uiState.isMapMode) Icons.AutoMirrored.Filled.ViewList else Icons.Default.Map,
                             contentDescription = stringResource(
                                 if (uiState.isMapMode) R.string.switch_to_list else R.string.switch_to_map
                             )
@@ -77,6 +97,7 @@ fun ExploreScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
+            // Search Bar
             SearchBar(
                 query = uiState.searchQuery,
                 onQueryChange = { onIntent(ExploreIntent.SearchQueryChanged(it)) },
@@ -86,34 +107,54 @@ fun ExploreScreen(
             )
 
             // Filters
-            ExploreFilters(
+            ExploreFiltersBar(
                 filters = uiState.activeFilters,
                 onFiltersChanged = { onIntent(ExploreIntent.FilterChanged(it)) },
-                modifier = Modifier.padding(horizontal = 16.dp)
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
             )
 
             // Content
             Box(modifier = Modifier.fillMaxSize()) {
                 if (uiState.isMapMode) {
                     // Map View
+                    val cameraPositionState = rememberCameraPositionState {
+                        position = CameraPosition.fromLatLngZoom(
+                            LatLng(48.8566, 2.3522), // Default to Paris
+                            12f
+                        )
+                    }
+
                     GoogleMap(
                         modifier = Modifier.fillMaxSize(),
-                        cameraPositionState = rememberCameraPositionState(),
+                        cameraPositionState = cameraPositionState,
                         uiSettings = MapUiSettings(
                             zoomControlsEnabled = false,
                             myLocationButtonEnabled = true
                         )
                     ) {
-                        // TODO: Add tour markers
+                        // Add markers for tours
+                        uiState.tours.forEach { tour ->
+                            // TODO: Add actual tour location markers
+                        }
                     }
                 } else {
-                    // List View
                     if (uiState.isLoading) {
                         Box(
                             modifier = Modifier.fillMaxSize(),
                             contentAlignment = Alignment.Center
                         ) {
                             CircularProgressIndicator()
+                        }
+                    } else if (uiState.tours.isEmpty()) {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "No tours found",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                     } else {
                         LazyColumn(
