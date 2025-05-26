@@ -2,6 +2,7 @@ package com.xwurfel.tourry.ui.tour.detail
 
 import androidx.lifecycle.SavedStateHandle
 import com.xwurfel.tourry.core.ui.MviViewModel
+import com.xwurfel.tourry.feature.analytics.TourAnalytics
 import com.xwurfel.tourry.feature.mock.MockDataManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
@@ -11,7 +12,8 @@ import javax.inject.Inject
 @HiltViewModel
 class TourDetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
-    private val mockDataManager: MockDataManager
+    private val mockDataManager: MockDataManager,
+    private val tourAnalytics: TourAnalytics,
 ) : MviViewModel<TourDetailUiState, TourDetailPartialState, TourDetailEvent, TourDetailIntent>(
     initialState = TourDetailUiState()
 ) {
@@ -19,6 +21,11 @@ class TourDetailViewModel @Inject constructor(
     private val tourId: String = savedStateHandle.get<String>("tourId") ?: ""
 
     init {
+        tourAnalytics.trackEvent(
+            "tour_detail_opened",
+            mapOf("tour_id" to tourId)
+        )
+
         observeContinuousChanges(
             loadTourDetail(),
             observeJoinedStatus()
@@ -29,12 +36,27 @@ class TourDetailViewModel @Inject constructor(
         when (intent) {
             TourDetailIntent.JoinTour -> {
                 emit(TourDetailPartialState.JoiningTour)
+                tourAnalytics.trackEvent(
+                    "tour_join_attempted",
+                    mapOf("tour_id" to tourId)
+                )
+
                 try {
                     val success = mockDataManager.joinTour(tourId)
                     if (success) {
-                        emit(TourDetailPartialState.TourJoined)
-                        // If the tour is live, navigate directly to live tour
+                        // Track successful join
                         val tour = uiStateSnapshot.value.tour
+                        tourAnalytics.trackEvent(
+                            "tour_joined",
+                            mapOf(
+                                "tour_id" to tourId,
+                                "tour_price" to (tour?.price?.toString() ?: "0"),
+                                "join_method" to "detail_page"
+                            )
+                        )
+
+                        emit(TourDetailPartialState.TourJoined)
+
                         if (tour?.isLive == true) {
                             publishEvent(TourDetailEvent.NavigateToLiveTour)
                         } else {
@@ -49,7 +71,12 @@ class TourDetailViewModel @Inject constructor(
             }
 
             TourDetailIntent.StartTour -> {
-                // Check if user has joined the tour
+                // Track tour start
+                tourAnalytics.trackEvent(
+                    "tour_started_from_detail",
+                    mapOf("tour_id" to tourId)
+                )
+
                 val joinedIds = mockDataManager.joinedTourIds.value
                 if (tourId in joinedIds) {
                     publishEvent(TourDetailEvent.NavigateToLiveTour)
@@ -58,15 +85,18 @@ class TourDetailViewModel @Inject constructor(
                 }
             }
 
+            TourDetailIntent.ShareTour -> {
+                // Track share
+                tourAnalytics.trackEvent(
+                    "tour_shared",
+                    mapOf("tour_id" to tourId, "share_source" to "detail_page")
+                )
+                emit(TourDetailPartialState.TourShared)
+            }
+
             TourDetailIntent.RefreshTour -> {
                 emit(TourDetailPartialState.Loading)
                 // Refresh will be handled by loadTourDetail
-            }
-
-            TourDetailIntent.ShareTour -> {
-                // TODO: Implement sharing functionality
-                // For now, just show a success message
-                emit(TourDetailPartialState.TourShared)
             }
         }
     }

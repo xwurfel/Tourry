@@ -188,6 +188,12 @@ class TourAnalytics @Inject constructor(
         }
     }
 
+    fun trackEvent(eventName: String, parameters: Map<String, String>) {
+        analyticsScope.launch {
+            logEvent(eventName, parameters)
+        }
+    }
+
     private suspend fun logEvent(eventName: String, parameters: Map<String, String>) {
         // TODO: Implement actual analytics logging
         // This could be Firebase Analytics, custom backend, or other service

@@ -11,12 +11,6 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navOptions
-import com.xwurfel.tourry.ui.navigation.authRoute
-import com.xwurfel.tourry.ui.navigation.exploreRoute
-import com.xwurfel.tourry.ui.navigation.liveTourRouteWithArgs
-import com.xwurfel.tourry.ui.navigation.myToursRoute
-import com.xwurfel.tourry.ui.navigation.profileRoute
-import com.xwurfel.tourry.ui.navigation.tourSummaryRouteWithArgs
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.WhileSubscribed
@@ -53,11 +47,17 @@ class TourryAppState(
             .currentBackStackEntryAsState().value?.destination
 
     val shouldShowNavigation: Boolean
-        @Composable get() = when (currentDestination?.route) {
-            authRoute -> false
-            liveTourRouteWithArgs -> false
-            tourSummaryRouteWithArgs -> false
-            else -> true
+        @Composable get() {
+            val route = currentDestination?.route
+            return when (route) {
+                authRoute -> false
+                liveTourRouteWithArgs -> false
+                tourSummaryRouteWithArgs -> false
+                // Hide navigation during tour creation for focused experience
+                tourCreationRoute -> false
+                tourCreationRouteWithArgs -> false
+                else -> true
+            }
         }
 
     val shouldShowBottomBar: Boolean
@@ -84,10 +84,15 @@ class TourryAppState(
 
     fun navigateToTopLevelDestination(topLevelDestination: TopLevelDestination) {
         val topLevelNavOptions = navOptions {
+            // Pop up to the start destination of the graph to
+            // avoid building up a large stack of destinations
             popUpTo(navController.graph.startDestinationId) {
                 saveState = true
             }
+            // Avoid multiple copies of the same destination when
+            // reselecting the same item
             launchSingleTop = true
+            // Restore state when reselecting a previously selected item
             restoreState = true
         }
 
@@ -96,5 +101,14 @@ class TourryAppState(
             TopLevelDestination.MY_TOURS -> navController.navigate(myToursRoute, topLevelNavOptions)
             TopLevelDestination.PROFILE -> navController.navigate(profileRoute, topLevelNavOptions)
         }
+    }
+
+    /**
+     * Helper function to check if current destination is a top level destination
+     */
+    @Composable
+    fun isTopLevelDestination(): Boolean {
+        val route = currentDestination?.route
+        return route in listOf(exploreRoute, myToursRoute, profileRoute)
     }
 }

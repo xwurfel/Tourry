@@ -9,18 +9,6 @@ import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.xwurfel.tourry.ui.auth.AuthRoute
 import com.xwurfel.tourry.ui.explore.ExploreRoute
-import com.xwurfel.tourry.ui.navigation.authRoute
-import com.xwurfel.tourry.ui.navigation.exploreRoute
-import com.xwurfel.tourry.ui.navigation.liveTourRoute
-import com.xwurfel.tourry.ui.navigation.liveTourRouteWithArgs
-import com.xwurfel.tourry.ui.navigation.myToursRoute
-import com.xwurfel.tourry.ui.navigation.profileRoute
-import com.xwurfel.tourry.ui.navigation.tourCreationRoute
-import com.xwurfel.tourry.ui.navigation.tourCreationRouteWithArgs
-import com.xwurfel.tourry.ui.navigation.tourDetailRoute
-import com.xwurfel.tourry.ui.navigation.tourDetailRouteWithArgs
-import com.xwurfel.tourry.ui.navigation.tourSummaryRoute
-import com.xwurfel.tourry.ui.navigation.tourSummaryRouteWithArgs
 import com.xwurfel.tourry.ui.profile.ProfileRoute
 import com.xwurfel.tourry.ui.tour.creation.TourCreationRoute
 import com.xwurfel.tourry.ui.tour.detail.TourDetailRoute
@@ -35,6 +23,7 @@ fun TourryNavHost(
     startDestination: String = appState.startDestination.collectAsStateWithLifecycle().value,
 ) {
     val navController = appState.navController
+
     NavHost(
         navController = navController,
         startDestination = startDestination,
@@ -44,7 +33,7 @@ fun TourryNavHost(
         composable(exploreRoute) {
             ExploreRoute(
                 onNavigateToTourDetail = { tourId ->
-                    navController.navigate("$tourDetailRoute/$tourId")
+                    navController.navigate(TourryNavigation.createTourDetailRoute(tourId))
                 },
                 onNavigateToTourCreation = {
                     navController.navigate(tourCreationRoute)
@@ -55,16 +44,16 @@ fun TourryNavHost(
         composable(myToursRoute) {
             MyToursRoute(
                 onNavigateToTourDetail = { tourId ->
-                    navController.navigate("$tourDetailRoute/$tourId")
+                    navController.navigate(TourryNavigation.createTourDetailRoute(tourId))
                 },
                 onNavigateToLiveTour = { tourId ->
-                    navController.navigate("$liveTourRoute/$tourId")
+                    navController.navigate(TourryNavigation.createLiveTourRoute(tourId))
                 },
                 onNavigateToTourSummary = { tourId ->
-                    navController.navigate("$tourSummaryRoute/$tourId")
+                    navController.navigate(TourryNavigation.createTourSummaryRoute(tourId))
                 },
                 onNavigateToTourEdit = { tourId ->
-                    navController.navigate("$tourCreationRoute?tourId=$tourId")
+                    navController.navigate(TourryNavigation.createTourCreationRoute(tourId))
                 }
             )
         }
@@ -73,7 +62,8 @@ fun TourryNavHost(
             ProfileRoute(
                 onNavigateToAuth = {
                     navController.navigate(authRoute) {
-                        popUpTo(profileRoute) { inclusive = false }
+                        // Don't clear the profile screen from backstack
+                        // so user can return to it after auth
                     }
                 }
             )
@@ -83,6 +73,7 @@ fun TourryNavHost(
         composable(authRoute) {
             AuthRoute(
                 onAuthSuccess = {
+                    // Simply pop back to previous screen after successful auth
                     navController.popBackStack()
                 }
             )
@@ -96,14 +87,17 @@ fun TourryNavHost(
             val tourId = backStackEntry.arguments?.getString("tourId") ?: ""
             TourDetailRoute(
                 tourId = tourId,
-                onNavigateBack = { navController.popBackStack() },
+                onNavigateBack = {
+                    navController.popBackStack()
+                },
                 onNavigateToLiveTour = {
-                    navController.navigate("$liveTourRoute/$tourId") {
-                        popUpTo(tourDetailRoute) { inclusive = true }
+                    navController.navigate(TourryNavigation.createLiveTourRoute(tourId)) {
+                        // Clear the tour detail from backstack since we're starting the live tour
+                        popUpTo(tourDetailRouteWithArgs) { inclusive = true }
                     }
                 },
                 onNavigateToBooking = {
-                    // For now, just show the tour detail with joined state
+                    // For now, just stay on tour detail with updated joined state
                     // In the future, this could navigate to a booking confirmation screen
                 }
             )
@@ -122,11 +116,28 @@ fun TourryNavHost(
         ) { backStackEntry ->
             val editingTourId = backStackEntry.arguments?.getString("tourId")
             TourCreationRoute(
-                onNavigateBack = { navController.popBackStack() },
+                onNavigateBack = {
+                    navController.popBackStack()
+                },
                 onTourCreated = { tourId ->
-                    // Navigate to the newly created tour detail
-                    navController.navigate("$tourDetailRoute/$tourId") {
-                        popUpTo(exploreRoute) // Go back to explore after creation
+                    // Navigate to the newly created tour detail and clear creation from backstack
+                    navController.navigate(TourryNavigation.createTourDetailRoute(tourId)) {
+                        popUpTo(tourCreationRouteWithArgs) { inclusive = true }
+                    }
+                }
+            )
+        }
+
+        // Simple tour creation without arguments
+        composable(tourCreationRoute) {
+            TourCreationRoute(
+                onNavigateBack = {
+                    navController.popBackStack()
+                },
+                onTourCreated = { tourId ->
+                    // Navigate to the newly created tour detail and clear creation from backstack
+                    navController.navigate(TourryNavigation.createTourDetailRoute(tourId)) {
+                        popUpTo(tourCreationRoute) { inclusive = true }
                     }
                 }
             )
@@ -141,8 +152,9 @@ fun TourryNavHost(
             LiveTourRoute(
                 tourId = tourId,
                 onTourCompleted = {
-                    navController.navigate("$tourSummaryRoute/$tourId") {
-                        popUpTo(liveTourRoute) { inclusive = true }
+                    // Navigate to summary and clear live tour from backstack
+                    navController.navigate(TourryNavigation.createTourSummaryRoute(tourId)) {
+                        popUpTo(liveTourRouteWithArgs) { inclusive = true }
                     }
                 },
                 onNavigateBack = {
@@ -160,6 +172,7 @@ fun TourryNavHost(
             TourSummaryRoute(
                 tourId = tourId,
                 onNavigateHome = {
+                    // Navigate to explore and clear everything above it from backstack
                     navController.navigate(exploreRoute) {
                         popUpTo(exploreRoute) { inclusive = true }
                     }

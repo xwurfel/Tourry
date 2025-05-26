@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.Add
@@ -30,6 +31,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -127,7 +129,7 @@ fun ExploreScreen(
             ExploreFiltersBar(
                 filters = uiState.activeFilters,
                 onFiltersChanged = { onIntent(ExploreIntent.FilterChanged(it)) },
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                modifier = Modifier.padding(vertical = 8.dp)
             )
 
             // Content
@@ -160,22 +162,23 @@ fun TourMapView(
 ) {
     val cameraPositionState = rememberCameraPositionState {
         position = CameraPosition.fromLatLngZoom(
-            LatLng(48.8566, 2.3522), // Default to Paris
+            LatLng(48.8566, 2.3522),
             12f
         )
     }
 
     GoogleMap(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(8.dp)
+            .clip(RoundedCornerShape(8.dp)),
         cameraPositionState = cameraPositionState,
         uiSettings = MapUiSettings(
             zoomControlsEnabled = false,
             myLocationButtonEnabled = true
         )
     ) {
-        // Add markers for tours
         tours.forEach { tour ->
-            // Use mock coordinates for now
             Marker(
                 state = MarkerState(
                     position = LatLng(

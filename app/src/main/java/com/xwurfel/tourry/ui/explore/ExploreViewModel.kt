@@ -1,6 +1,7 @@
 package com.xwurfel.tourry.ui.explore
 
 import com.xwurfel.tourry.core.ui.MviViewModel
+import com.xwurfel.tourry.feature.analytics.TourAnalytics
 import com.xwurfel.tourry.feature.mock.MockDataManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
@@ -10,7 +11,8 @@ import javax.inject.Inject
 
 @HiltViewModel
 class ExploreViewModel @Inject constructor(
-    private val mockDataManager: MockDataManager
+    private val mockDataManager: MockDataManager,
+    private val tourAnalytics: TourAnalytics
 ) : MviViewModel<ExploreUiState, ExplorePartialState, ExploreEvent, ExploreIntent>(
     initialState = ExploreUiState()
 ) {
@@ -26,30 +28,60 @@ class ExploreViewModel @Inject constructor(
         when (intent) {
             is ExploreIntent.SearchQueryChanged -> {
                 emit(ExplorePartialState.SearchQueryChanged(intent.query))
-                // Filter tours based on search query
-                val currentTours = uiStateSnapshot.value.tours
-                val filteredTours = if (intent.query.isBlank()) {
-                    currentTours
-                } else {
-                    currentTours.filter { tour ->
+                if (intent.query.isNotBlank()) {
+                    val currentTours = uiStateSnapshot.value.tours
+                    val filteredTours = currentTours.filter { tour ->
                         tour.title.contains(intent.query, ignoreCase = true) ||
                                 tour.description.contains(intent.query, ignoreCase = true)
                     }
+
+                    tourAnalytics.trackSearch(
+                        query = intent.query,
+                        resultsCount = filteredTours.size
+                    )
+
+                    emit(ExplorePartialState.ToursFiltered(filteredTours))
                 }
-                emit(ExplorePartialState.ToursFiltered(filteredTours))
             }
 
             is ExploreIntent.FilterChanged -> {
                 emit(ExplorePartialState.FiltersChanged(intent.filters))
-                // Apply filters to current tours
+
+                val filterUsed = when {
+                    intent.filters.dateRange != null -> "date"
+                    intent.filters.maxDuration != null -> "duration"
+                    intent.filters.maxPrice != null -> "price"
+                    intent.filters.maxDistance != null -> "distance"
+                    else -> null
+                }
+
+                if (filterUsed != null) {
+                    val currentTours = uiStateSnapshot.value.allTours
+                    tourAnalytics.trackSearch(
+                        query = uiStateSnapshot.value.searchQuery,
+                        resultsCount = currentTours.size,
+                        filterUsed = filterUsed
+                    )
+                }
+
                 applyFilters(intent.filters)
             }
 
+
             is ExploreIntent.TourClicked -> {
+                tourAnalytics.trackEvent(
+                    "tour_detail_viewed",
+                    mapOf("tour_id" to intent.tourId)
+                )
                 publishEvent(ExploreEvent.NavigateToTourDetail(intent.tourId))
             }
 
             is ExploreIntent.CreateTourClicked -> {
+                // Track creation intent
+                tourAnalytics.trackEvent(
+                    "tour_creation_started",
+                    mapOf("source" to "explore_fab")
+                )
                 publishEvent(ExploreEvent.NavigateToTourCreation)
             }
 
@@ -68,6 +100,13 @@ class ExploreViewModel @Inject constructor(
                 try {
                     val success = mockDataManager.joinTour(intent.tourId)
                     if (success) {
+                        tourAnalytics.trackEvent(
+                            "tour_joined_quick",
+                            mapOf(
+                                "tour_id" to intent.tourId,
+                                "join_method" to "quick_join"
+                            )
+                        )
                         emit(ExplorePartialState.TourJoined(intent.tourId))
                     } else {
                         emit(ExplorePartialState.Error("Failed to join tour"))

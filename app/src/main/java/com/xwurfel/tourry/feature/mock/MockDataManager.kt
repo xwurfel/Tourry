@@ -1,6 +1,8 @@
 package com.xwurfel.tourry.feature.mock
 
 import com.xwurfel.tourry.ui.explore.TourPreview
+import com.xwurfel.tourry.ui.profile.UserProfile
+import com.xwurfel.tourry.ui.profile.UserStats
 import com.xwurfel.tourry.ui.tour.detail.TourDetail
 import com.xwurfel.tourry.ui.tour.detail.TourGuide
 import com.xwurfel.tourry.ui.tour.detail.TourStopDetail
@@ -19,8 +21,7 @@ import javax.inject.Singleton
 import kotlin.random.Random
 
 /**
- * Enhanced MockDataManager that simulates realistic backend functionality
- * with proper data updates and state management
+ * Enhanced MockDataManager with full profile support
  */
 @Singleton
 class MockDataManager @Inject constructor() {
@@ -44,15 +45,140 @@ class MockDataManager @Inject constructor() {
     private val _currentUserId = MutableStateFlow<String?>(null)
     val currentUserId: StateFlow<String?> = _currentUserId.asStateFlow()
 
+    private val _currentUserProfile = MutableStateFlow<UserProfile?>(null)
+    val currentUserProfile: StateFlow<UserProfile?> = _currentUserProfile.asStateFlow()
+
+    private val _userStats = MutableStateFlow<UserStats?>(null)
+    val userStats: StateFlow<UserStats?> = _userStats.asStateFlow()
+
+    // Settings state
+    private val _notificationsEnabled = MutableStateFlow(true)
+    val notificationsEnabled: StateFlow<Boolean> = _notificationsEnabled.asStateFlow()
+
+    private val _locationSharingEnabled = MutableStateFlow(true)
+    val locationSharingEnabled: StateFlow<Boolean> = _locationSharingEnabled.asStateFlow()
+
     // Live tour simulation
     private val _liveTours = MutableStateFlow<Set<String>>(emptySet())
     val liveTours: StateFlow<Set<String>> = _liveTours.asStateFlow()
 
+    // User profiles storage (simulates backend)
+    private val userProfiles = mutableMapOf<String, UserProfile>()
+    private val userStatsMap = mutableMapOf<String, UserStats>()
+
     init {
         startLiveTourSimulation()
         startDynamicDataUpdates()
+        seedMockUserData()
     }
 
+    // Profile Management
+    suspend fun loadUserProfile(userId: String): UserProfile? {
+        delay(800) // Simulate network delay
+        return userProfiles[userId]
+    }
+
+    suspend fun loadUserStats(userId: String): UserStats? {
+        delay(500)
+        return userStatsMap[userId]
+    }
+
+    suspend fun updateUserProfile(userId: String, profile: UserProfile): Boolean {
+        delay(1000) // Simulate network delay
+
+        return try {
+            userProfiles[userId] = profile
+            _currentUserProfile.value = profile
+            true
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    suspend fun uploadProfileAvatar(userId: String, imageUri: String): String? {
+        delay(2000) // Simulate upload time
+
+        // Simulate successful upload and return a mock URL
+        val mockAvatarUrl =
+            "https://mock-cdn.example.com/avatars/${userId}_${System.currentTimeMillis()}.jpg"
+
+        // Update the current profile with new avatar
+        _currentUserProfile.value?.let { currentProfile ->
+            val updatedProfile = currentProfile.copy(avatarUrl = mockAvatarUrl)
+            userProfiles[userId] = updatedProfile
+            _currentUserProfile.value = updatedProfile
+        }
+
+        return mockAvatarUrl
+    }
+
+    suspend fun deleteAccount(userId: String): Boolean {
+        delay(1500)
+
+        return try {
+            // Remove user data
+            userProfiles.remove(userId)
+            userStatsMap.remove(userId)
+
+            // Sign out user
+            signOut()
+            true
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    // Settings Management
+    suspend fun updateNotificationSettings(enabled: Boolean): Boolean {
+        delay(300)
+        _notificationsEnabled.value = enabled
+        return true
+    }
+
+    suspend fun updateLocationSharingSettings(enabled: Boolean): Boolean {
+        delay(300)
+        _locationSharingEnabled.value = enabled
+        return true
+    }
+
+    // Authentication
+    fun signIn(userId: String, userType: String = "email") {
+        _isAuthenticated.value = true
+        _currentUserId.value = userId
+
+        scope.launch {
+            // Load or create user profile
+            val profile = loadUserProfile(userId) ?: createDefaultProfile(userId, userType)
+            val stats = loadUserStats(userId) ?: createDefaultStats(userId)
+
+            _currentUserProfile.value = profile
+            _userStats.value = stats
+        }
+    }
+
+    fun signOut() {
+        _isAuthenticated.value = false
+        _currentUserId.value = null
+        _currentUserProfile.value = null
+        _userStats.value = null
+        _joinedTourIds.value = emptySet()
+    }
+
+    // Analytics and Statistics
+    fun trackProfileView(viewedUserId: String) {
+        scope.launch {
+            // Simulate analytics tracking
+            println("Analytics: Profile viewed - User: $viewedUserId")
+        }
+    }
+
+    fun trackProfileEdit(userId: String, changedFields: List<String>) {
+        scope.launch {
+            println("Analytics: Profile edited - User: $userId, Fields: $changedFields")
+        }
+    }
+
+    // Existing methods remain the same...
     fun getTourDetail(tourId: String): TourDetail? {
         return when (tourId) {
             "1" -> createTourDetail1()
@@ -61,7 +187,6 @@ class MockDataManager @Inject constructor() {
             "4" -> createTourDetail4()
             "5" -> createTourDetail5()
             else -> {
-                // Check if it's a user-created tour
                 val createdTour = _createdTours.value.find { it.id == tourId }
                 if (createdTour != null) {
                     createDefaultTourDetail(tourId)
@@ -73,10 +198,7 @@ class MockDataManager @Inject constructor() {
     }
 
     suspend fun joinTour(tourId: String): Boolean {
-        // Simulate network delay
         delay(500)
-
-        // Check if tour exists
         val tourExists = _availableTours.value.any { it.id == tourId } ||
                 _createdTours.value.any { it.id == tourId }
 
@@ -88,15 +210,62 @@ class MockDataManager @Inject constructor() {
         if (!wasAlreadyJoined) {
             currentJoined.add(tourId)
             _joinedTourIds.value = currentJoined
-
-            // Update spots left in available tours
             updateTourSpots(tourId, -1)
 
-            // Simulate analytics tracking
-            println("Analytics: User joined tour $tourId")
+            // Update user stats
+            _currentUserId.value?.let { userId ->
+                updateUserStatsAfterJoin(userId)
+            }
+        }
+        return true
+    }
+
+    suspend fun createTour(
+        title: String,
+        description: String,
+        stops: List<Any>,
+        startDateTime: Long?,
+        price: Double
+    ): String {
+        delay(1000)
+        val newTourId = "created_${System.currentTimeMillis()}"
+
+        val newCreatedTour = MyTour(
+            id = newTourId,
+            title = title,
+            coverImageUrl = null,
+            startTime = startDateTime ?: (System.currentTimeMillis() + 86400000),
+            status = TourStatus.UPCOMING,
+            participantsCount = 0,
+            rating = null
+        )
+
+        val updatedCreatedTours = _createdTours.value + newCreatedTour
+        _createdTours.value = updatedCreatedTours
+
+        val newTourPreview = TourPreview(
+            id = newTourId,
+            title = title,
+            description = description,
+            coverImageUrl = null,
+            rating = 0f,
+            price = price,
+            isFree = price == 0.0,
+            isLiveSoon = false,
+            startTime = startDateTime ?: (System.currentTimeMillis() + 86400000),
+            duration = stops.size * 15,
+            distance = stops.size * 0.3f
+        )
+
+        val updatedAvailableTours = _availableTours.value + newTourPreview
+        _availableTours.value = updatedAvailableTours
+
+        // Update user stats
+        _currentUserId.value?.let { userId ->
+            updateUserStatsAfterCreate(userId)
         }
 
-        return true
+        return newTourId
     }
 
     fun getJoinedTours(): List<MyTour> {
@@ -125,73 +294,8 @@ class MockDataManager @Inject constructor() {
             }
     }
 
-    suspend fun createTour(
-        title: String,
-        description: String,
-        stops: List<Any>, // TourStop from creation
-        startDateTime: Long?,
-        price: Double
-    ): String {
-        // Simulate network delay
-        delay(1000)
-
-        val newTourId = "created_${System.currentTimeMillis()}"
-
-        // Add to created tours
-        val newCreatedTour = MyTour(
-            id = newTourId,
-            title = title,
-            coverImageUrl = null,
-            startTime = startDateTime ?: (System.currentTimeMillis() + 86400000),
-            status = TourStatus.UPCOMING,
-            participantsCount = 0,
-            rating = null
-        )
-
-        val updatedCreatedTours = _createdTours.value + newCreatedTour
-        _createdTours.value = updatedCreatedTours
-
-        // Also add to available tours for others to discover
-        val newTourPreview = TourPreview(
-            id = newTourId,
-            title = title,
-            description = description,
-            coverImageUrl = null,
-            rating = 0f,
-            price = price,
-            isFree = price == 0.0,
-            isLiveSoon = false,
-            startTime = startDateTime ?: (System.currentTimeMillis() + 86400000),
-            duration = stops.size * 15, // Estimate 15 min per stop
-            distance = stops.size * 0.3f // Estimate 300m between stops
-        )
-
-        val updatedAvailableTours = _availableTours.value + newTourPreview
-        _availableTours.value = updatedAvailableTours
-
-        return newTourId
-    }
-
-    fun signIn(userId: String) {
-        _isAuthenticated.value = true
-        _currentUserId.value = userId
-
-        // Simulate loading some user data
-        scope.launch {
-            delay(500)
-            // Could load user's previous tours, favorites, etc.
-        }
-    }
-
-    fun signOut() {
-        _isAuthenticated.value = false
-        _currentUserId.value = null
-        _joinedTourIds.value = emptySet()
-    }
-
     suspend fun cancelTour(tourId: String): Boolean {
-        delay(300) // Simulate API call
-
+        delay(300)
         val updatedCreatedTours = _createdTours.value.filterNot { it.id == tourId }
         _createdTours.value = updatedCreatedTours
 
@@ -201,12 +305,100 @@ class MockDataManager @Inject constructor() {
         return true
     }
 
+    // Private helper methods
+    private fun createDefaultProfile(userId: String, userType: String): UserProfile {
+        val profile = when {
+            userId.startsWith("google_") -> UserProfile(
+                id = userId,
+                name = "John Doe",
+                email = "john.doe@gmail.com",
+                avatarUrl = null,
+                bio = "Travel enthusiast and local explorer",
+                rating = 4.8f,
+                reviewsCount = 23
+            )
+
+            userId.startsWith("email_") -> UserProfile(
+                id = userId,
+                name = "Jane Smith",
+                email = "jane.smith@example.com",
+                avatarUrl = null,
+                bio = "I love discovering hidden gems in my city",
+                rating = 4.6f,
+                reviewsCount = 15
+            )
+
+            userId.startsWith("guest_") -> UserProfile(
+                id = userId,
+                name = "Guest User",
+                email = "",
+                avatarUrl = null,
+                bio = "",
+                rating = 0f,
+                reviewsCount = 0
+            )
+
+            else -> UserProfile(
+                id = userId,
+                name = "Tour Guide",
+                email = "guide@example.com",
+                avatarUrl = null,
+                bio = "Professional tour guide with 5+ years experience",
+                rating = 4.9f,
+                reviewsCount = 67
+            )
+        }
+
+        userProfiles[userId] = profile
+        return profile
+    }
+
+    private fun createDefaultStats(userId: String): UserStats {
+        val stats = if (userId.startsWith("guest_")) {
+            UserStats(
+                toursCreated = 0,
+                toursJoined = 0,
+                totalParticipants = 0
+            )
+        } else {
+            UserStats(
+                toursCreated = Random.nextInt(0, 8),
+                toursJoined = Random.nextInt(5, 25),
+                totalParticipants = Random.nextInt(10, 150)
+            )
+        }
+
+        userStatsMap[userId] = stats
+        return stats
+    }
+
+    private fun updateUserStatsAfterJoin(userId: String) {
+        val currentStats = userStatsMap[userId] ?: createDefaultStats(userId)
+        val updatedStats = currentStats.copy(toursJoined = currentStats.toursJoined + 1)
+        userStatsMap[userId] = updatedStats
+        _userStats.value = updatedStats
+    }
+
+    private fun updateUserStatsAfterCreate(userId: String) {
+        val currentStats = userStatsMap[userId] ?: createDefaultStats(userId)
+        val updatedStats = currentStats.copy(toursCreated = currentStats.toursCreated + 1)
+        userStatsMap[userId] = updatedStats
+        _userStats.value = updatedStats
+    }
+
+    private fun seedMockUserData() {
+        // Seed some mock users for demo purposes
+        scope.launch {
+            createDefaultProfile("demo_user_1", "email")
+            createDefaultProfile("demo_user_2", "google")
+            createDefaultProfile("demo_user_3", "guest")
+        }
+    }
+
     private fun updateTourSpots(tourId: String, delta: Int) {
         val currentTours = _availableTours.value.toMutableList()
         val tourIndex = currentTours.indexOfFirst { it.id == tourId }
         if (tourIndex != -1) {
-            // Since TourPreview doesn't have spots, we'll simulate this differently
-            // In a real app, this would update the actual spots count
             _availableTours.value = currentTours
         }
     }
@@ -214,30 +406,25 @@ class MockDataManager @Inject constructor() {
     private fun startLiveTourSimulation() {
         scope.launch {
             while (true) {
-                delay(30000) // Check every 30 seconds
-
+                delay(30000)
                 val currentTime = System.currentTimeMillis()
                 val upcomingTours = _availableTours.value.filter { tour ->
                     val timeDiff = tour.startTime - currentTime
-                    timeDiff in 0..1800000 // Tours starting within 30 minutes
+                    timeDiff in 0..1800000
                 }
 
                 val currentlyLive = _liveTours.value.toMutableSet()
-
-                // Add new live tours
                 upcomingTours.forEach { tour ->
                     if (tour.id !in currentlyLive) {
                         currentlyLive.add(tour.id)
-                        // Update tour to show as "live soon"
                         updateTourLiveStatus(tour.id, true)
                     }
                 }
 
-                // Remove tours that are no longer live (after 3 hours)
                 val toursToRemove = currentlyLive.filter { liveId ->
                     val tour = _availableTours.value.find { it.id == liveId }
                     tour?.let {
-                        currentTime - it.startTime > 10800000 // 3 hours
+                        currentTime - it.startTime > 10800000
                     } ?: true
                 }
 
@@ -263,23 +450,18 @@ class MockDataManager @Inject constructor() {
     private fun startDynamicDataUpdates() {
         scope.launch {
             while (true) {
-                delay(60000) // Update every minute
-
-                // Simulate tour ratings and participant count changes
+                delay(60000)
                 val updatedTours = _availableTours.value.map { tour ->
-                    // Slight rating fluctuations for realism
                     val newRating = (tour.rating + (Random.nextFloat() - 0.5f) * 0.1f)
                         .coerceIn(3.5f, 5.0f)
-
                     tour.copy(rating = (newRating * 10).toInt() / 10.0f)
                 }
-
                 _availableTours.value = updatedTours
             }
         }
     }
 
-    // Mock data generation methods remain the same...
+    // Mock data generation methods (keeping existing ones)
     private fun generateInitialTours(): List<TourPreview> {
         val currentTime = System.currentTimeMillis()
         return listOf(
@@ -292,7 +474,7 @@ class MockDataManager @Inject constructor() {
                 price = 25.0,
                 isFree = false,
                 isLiveSoon = false,
-                startTime = currentTime + 3600000, // 1 hour from now
+                startTime = currentTime + 3600000,
                 duration = 120,
                 distance = 3.2f
             ),
@@ -305,7 +487,7 @@ class MockDataManager @Inject constructor() {
                 price = 0.0,
                 isFree = true,
                 isLiveSoon = true,
-                startTime = currentTime + 1800000, // 30 minutes from now
+                startTime = currentTime + 1800000,
                 duration = 90,
                 distance = 2.1f
             ),
@@ -318,7 +500,7 @@ class MockDataManager @Inject constructor() {
                 price = 18.0,
                 isFree = false,
                 isLiveSoon = false,
-                startTime = currentTime + 7200000, // 2 hours from now
+                startTime = currentTime + 7200000,
                 duration = 75,
                 distance = 1.8f
             ),
@@ -331,7 +513,7 @@ class MockDataManager @Inject constructor() {
                 price = 35.0,
                 isFree = false,
                 isLiveSoon = false,
-                startTime = currentTime + 86400000, // Tomorrow
+                startTime = currentTime + 86400000,
                 duration = 150,
                 distance = 2.7f
             ),
@@ -344,7 +526,7 @@ class MockDataManager @Inject constructor() {
                 price = 22.0,
                 isFree = false,
                 isLiveSoon = false,
-                startTime = currentTime + 172800000, // Day after tomorrow
+                startTime = currentTime + 172800000,
                 duration = 105,
                 distance = 4.1f
             )
@@ -358,7 +540,7 @@ class MockDataManager @Inject constructor() {
                 id = "created_demo_1",
                 title = "My Secret Garden Tour",
                 coverImageUrl = null,
-                startTime = currentTime + 7200000, // 2 hours from now
+                startTime = currentTime + 7200000,
                 status = TourStatus.UPCOMING,
                 participantsCount = 5,
                 rating = null
@@ -367,7 +549,7 @@ class MockDataManager @Inject constructor() {
                 id = "created_demo_2",
                 title = "Local Artisan Workshop",
                 coverImageUrl = null,
-                startTime = currentTime - 172800000, // 2 days ago
+                startTime = currentTime - 172800000,
                 status = TourStatus.COMPLETED,
                 participantsCount = 8,
                 rating = 4.8f
@@ -375,7 +557,7 @@ class MockDataManager @Inject constructor() {
         )
     }
 
-    // Rest of the detailed tour creation methods remain the same as before...
+    // Existing detail creation methods remain the same...
     private fun createTourDetail1() = TourDetail(
         id = "1",
         title = "Hidden Gems of Paris",

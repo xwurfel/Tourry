@@ -36,11 +36,9 @@ fun Context.hasPermission(permission: String): Boolean {
     ) == PackageManager.PERMISSION_GRANTED
 }
 
-
 fun Activity.shouldShowPermissionRationale(permission: String): Boolean {
     return ActivityCompat.shouldShowRequestPermissionRationale(this, permission)
 }
-
 
 fun Context.hasGeofencingPermissions(): Boolean {
     val hasFineLocation = hasPermission(Manifest.permission.ACCESS_FINE_LOCATION)
@@ -50,7 +48,15 @@ fun Context.hasGeofencingPermissions(): Boolean {
         true // Not required for Android < 10
     }
 
-    return hasFineLocation && hasBackgroundLocation
+    // FOREGROUND_SERVICE_LOCATION is not a runtime permission, it's granted at install time
+    // So we don't need to check it here, but we can verify it's declared
+    val hasForegroundServiceLocation = if (Build.VERSION.SDK_INT >= 34) { // API 34 = Android 14
+        hasPermission(Manifest.permission.FOREGROUND_SERVICE_LOCATION)
+    } else {
+        true // Not required for Android < 14
+    }
+
+    return hasFineLocation && hasBackgroundLocation && hasForegroundServiceLocation
 }
 
 fun Context.openAppSettings() {
@@ -72,7 +78,13 @@ fun LocationPermissionsHandler(
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
         if (isGranted) {
-            onPermissionsGranted()
+            // Check if we have all required permissions now
+            if (context.hasGeofencingPermissions()) {
+                onPermissionsGranted()
+            } else {
+                // Still missing some permissions, show settings dialog
+                showSettingsDialog = true
+            }
         } else {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && context is Activity && context.shouldShowPermissionRationale(
                     Manifest.permission.ACCESS_BACKGROUND_LOCATION
@@ -94,7 +106,12 @@ fun LocationPermissionsHandler(
                     Manifest.permission.ACCESS_BACKGROUND_LOCATION
                 )
             } else {
-                onPermissionsGranted()
+                // Check if we have all required permissions now
+                if (context.hasGeofencingPermissions()) {
+                    onPermissionsGranted()
+                } else {
+                    showSettingsDialog = true
+                }
             }
         } else {
             if (context is Activity && context.shouldShowPermissionRationale(
@@ -117,6 +134,10 @@ fun LocationPermissionsHandler(
             backgroundLocationPermissionLauncher.launch(
                 Manifest.permission.ACCESS_BACKGROUND_LOCATION
             )
+        } else {
+            // We have runtime permissions but missing compile-time permissions
+            // This means the FOREGROUND_SERVICE_LOCATION permission is missing from manifest
+            showSettingsDialog = true
         }
     }
 
@@ -134,6 +155,13 @@ fun LocationPermissionsHandler(
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
                             "Background location permission is needed to detect when you're near " + "tour stops, even when the app is not in use."
+                        )
+                    }
+
+                    if (Build.VERSION.SDK_INT >= 34) { // API 34 = Android 14
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            "Location service permission is required to track your location during tours."
                         )
                     }
                 }
@@ -171,7 +199,7 @@ fun LocationPermissionsHandler(
             title = { Text("Permission Required") },
             text = {
                 Text(
-                    "Location permission is required for geofencing features. " + "Please enable it in app settings."
+                    "Location permissions are required for geofencing features. " + "Please enable all location permissions in app settings."
                 )
             },
             confirmButton = {

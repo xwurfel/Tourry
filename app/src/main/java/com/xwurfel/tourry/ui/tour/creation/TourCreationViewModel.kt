@@ -2,6 +2,7 @@ package com.xwurfel.tourry.ui.tour.creation
 
 import androidx.lifecycle.SavedStateHandle
 import com.xwurfel.tourry.core.ui.MviViewModel
+import com.xwurfel.tourry.feature.analytics.TourAnalytics
 import com.xwurfel.tourry.feature.mock.MockDataManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
@@ -11,7 +12,8 @@ import javax.inject.Inject
 @HiltViewModel
 class TourCreationViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
-    private val mockDataManager: MockDataManager
+    private val mockDataManager: MockDataManager,
+    private val tourAnalytics: TourAnalytics,
 ) : MviViewModel<TourCreationUiState, TourCreationPartialState, TourCreationEvent, TourCreationIntent>(
     initialState = TourCreationUiState()
 ) {
@@ -72,6 +74,10 @@ class TourCreationViewModel @Inject constructor(
             }
 
             is TourCreationIntent.AddStop -> {
+                tourAnalytics.trackEvent(
+                    "tour_stop_added",
+                    mapOf("stop_count" to (uiStateSnapshot.value.stops.size + 1).toString())
+                )
                 emit(TourCreationPartialState.StopAdded(intent.stop))
             }
 
@@ -98,6 +104,14 @@ class TourCreationViewModel @Inject constructor(
             }
 
             is TourCreationIntent.NextStep -> {
+                tourAnalytics.trackEvent(
+                    "tour_creation_step_completed",
+                    mapOf(
+                        "step" to uiStateSnapshot.value.currentStep.toString(),
+                        "next_step" to (uiStateSnapshot.value.currentStep + 1).toString()
+                    )
+                )
+
                 if (validateCurrentStep()) {
                     val currentStep = uiStateSnapshot.value.currentStep
                     if (currentStep < 3) {
@@ -118,7 +132,6 @@ class TourCreationViewModel @Inject constructor(
             is TourCreationIntent.PublishTour -> {
                 val state = uiStateSnapshot.value
 
-                // Validate all steps before publishing
                 if (!validateAllSteps(state)) {
                     emit(TourCreationPartialState.ValidationError("Please complete all required information"))
                     return@flow
@@ -127,13 +140,22 @@ class TourCreationViewModel @Inject constructor(
                 emit(TourCreationPartialState.Publishing)
 
                 try {
-                    kotlinx.coroutines.delay(1500) // Simulate API call
+                    kotlinx.coroutines.delay(1500)
 
                     val newTourId = mockDataManager.createTour(
                         title = state.title,
                         description = state.description,
                         stops = state.stops,
                         startDateTime = state.startDateTime,
+                        price = state.price
+                    )
+
+                    // Track tour creation with detailed analytics
+                    tourAnalytics.trackTourCreation(
+                        tourId = newTourId,
+                        stopCount = state.stops.size,
+                        hasAudio = state.stops.any { it.audioUrl != null },
+                        hasImages = state.stops.any { it.mediaUrls.isNotEmpty() },
                         price = state.price
                     )
 
