@@ -53,15 +53,17 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.xwurfel.tourry.R
 import com.xwurfel.tourry.core.extension.collectWithLifecycle
+import com.xwurfel.tourry.ui.main.LocalSnackbarHostState
 
 @Composable
 fun ProfileRoute(
     onNavigateToCreateTour: () -> Unit,
     onNavigateToMyTours: () -> Unit,
+    onNavigateToAuth: () -> Unit,
     viewModel: ProfileViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val snackbarHostState = remember { SnackbarHostState() }
+    val snackbarHostState = LocalSnackbarHostState.current
 
     viewModel.event.collectWithLifecycle { event ->
         when (event) {
@@ -80,6 +82,7 @@ fun ProfileRoute(
     ProfileScreen(
         uiState = uiState,
         onIntent = viewModel::acceptIntent,
+        onNavigateToAuth = onNavigateToAuth,
         snackbarHostState = snackbarHostState
     )
 }

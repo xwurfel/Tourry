@@ -12,7 +12,16 @@ interface UserRepository {
     fun observeUserStats(): Flow<UserStats?>
     fun observeUserSettings(): Flow<UserSettings>
 
-    suspend fun signIn(): DomainResult<User>
+    suspend fun signInWithGoogle(): DomainResult<User>
+    suspend fun signInWithGoogleCredential(idToken: String): DomainResult<User>
+    suspend fun signInWithEmailAndPassword(email: String, password: String): DomainResult<User>
+    suspend fun createUserWithEmailAndPassword(
+        email: String,
+        password: String,
+        name: String
+    ): DomainResult<User>
+
+    suspend fun sendPasswordResetEmail(email: String): DomainResult<Unit>
     suspend fun signOut(): DomainResult<Unit>
     suspend fun updateUserSettings(settings: UserSettings): DomainResult<Unit>
 }

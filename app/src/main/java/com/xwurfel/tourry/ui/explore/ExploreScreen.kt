@@ -28,7 +28,6 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -48,6 +47,7 @@ import com.xwurfel.tourry.core.extension.collectWithLifecycle
 import com.xwurfel.tourry.ui.explore.components.ExploreFiltersBar
 import com.xwurfel.tourry.ui.explore.components.SearchBar
 import com.xwurfel.tourry.ui.explore.components.TourCard
+import com.xwurfel.tourry.ui.main.LocalSnackbarHostState
 
 @Composable
 fun ExploreRoute(
@@ -56,7 +56,7 @@ fun ExploreRoute(
     viewModel: ExploreViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val snackbarHostState = remember { SnackbarHostState() }
+    val snackbarHostState = LocalSnackbarHostState.current
 
     viewModel.event.collectWithLifecycle { event ->
         when (event) {

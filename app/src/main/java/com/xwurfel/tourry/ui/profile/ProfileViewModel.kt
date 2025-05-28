@@ -10,7 +10,6 @@ import com.xwurfel.tourry.feature.profile.domain.usecase.ObserveAuthenticationSt
 import com.xwurfel.tourry.feature.profile.domain.usecase.ObserveCurrentUserUseCase
 import com.xwurfel.tourry.feature.profile.domain.usecase.ObserveUserSettingsUseCase
 import com.xwurfel.tourry.feature.profile.domain.usecase.ObserveUserStatsUseCase
-import com.xwurfel.tourry.feature.profile.domain.usecase.SignInUseCase
 import com.xwurfel.tourry.feature.profile.domain.usecase.SignOutUseCase
 import com.xwurfel.tourry.feature.profile.domain.usecase.UpdateUserSettingsUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -25,7 +24,6 @@ class ProfileViewModel @Inject constructor(
     private val observeAuthenticationStateUseCase: ObserveAuthenticationStateUseCase,
     private val observeUserStatsUseCase: ObserveUserStatsUseCase,
     private val observeUserSettingsUseCase: ObserveUserSettingsUseCase,
-    private val signInUseCase: SignInUseCase,
     private val signOutUseCase: SignOutUseCase,
     private val updateUserSettingsUseCase: UpdateUserSettingsUseCase
 ) : MviViewModel<ProfileUiState, ProfilePartialState, ProfileEvent, ProfileIntent>(
@@ -41,16 +39,9 @@ class ProfileViewModel @Inject constructor(
     override fun mapIntents(intent: ProfileIntent): Flow<ProfilePartialState> = flow {
         when (intent) {
             ProfileIntent.SignIn -> {
-                emit(ProfilePartialState.Loading(true))
-                signInUseCase()
-                    .onSuccess { user ->
-                        emit(ProfilePartialState.Loading(false))
-                        // User data will be updated via observeUserData flow
-                    }
-                    .onFailure { error ->
-                        emit(ProfilePartialState.Loading(false))
-                        emit(ProfilePartialState.Error(error.msg.toString()))
-                    }
+                // Navigate to auth screen - handled by navigation
+                // We don't have a direct sign-in use case anymore since it's handled by AuthViewModel
+                emit(ProfilePartialState.Error("Please use the auth screen to sign in"))
             }
 
             ProfileIntent.SignOut -> {
