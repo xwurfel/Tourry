@@ -42,15 +42,17 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coil.compose.AsyncImage
 import com.xwurfel.tourry.R
 import com.xwurfel.tourry.core.extension.collectWithLifecycle
 import com.xwurfel.tourry.ui.main.LocalSnackbarHostState
@@ -59,7 +61,6 @@ import com.xwurfel.tourry.ui.main.LocalSnackbarHostState
 fun ProfileRoute(
     onNavigateToCreateTour: () -> Unit,
     onNavigateToMyTours: () -> Unit,
-    onNavigateToAuth: () -> Unit,
     viewModel: ProfileViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -82,7 +83,6 @@ fun ProfileRoute(
     ProfileScreen(
         uiState = uiState,
         onIntent = viewModel::acceptIntent,
-        onNavigateToAuth = onNavigateToAuth,
         snackbarHostState = snackbarHostState
     )
 }
@@ -141,7 +141,11 @@ fun ProfileScreen(
                 } else {
                     // Guest user section
                     GuestProfileSection(
-                        onSignInClick = { onIntent(ProfileIntent.SignIn) }
+                        onSignInClick = {
+                            // Handle sign in through the mock data manager for now
+                            // In a real app, this would navigate to auth screen
+                            onIntent(ProfileIntent.SignIn)
+                        }
                     )
                 }
             }
@@ -193,19 +197,30 @@ fun UserProfileSection(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Profile picture placeholder
-                Surface(
-                    modifier = Modifier.size(72.dp),
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.primary
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            Icons.Default.Person,
-                            contentDescription = null,
-                            modifier = Modifier.size(36.dp),
-                            tint = MaterialTheme.colorScheme.onPrimary
-                        )
+                // Profile picture
+                if (user.avatarUrl != null) {
+                    AsyncImage(
+                        model = user.avatarUrl,
+                        contentDescription = "Profile picture",
+                        modifier = Modifier
+                            .size(72.dp)
+                            .clip(CircleShape),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    Surface(
+                        modifier = Modifier.size(72.dp),
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.primary
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                Icons.Default.Person,
+                                contentDescription = null,
+                                modifier = Modifier.size(36.dp),
+                                tint = MaterialTheme.colorScheme.onPrimary
+                            )
+                        }
                     }
                 }
 

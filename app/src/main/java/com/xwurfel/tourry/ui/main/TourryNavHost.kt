@@ -72,17 +72,18 @@ fun TourryNavHost(
             )
         }
 
-        // Auth flow
         composable(authRoute) {
             AuthRoute(
                 onAuthSuccess = {
-                    // Simply pop back to previous screen after successful auth
-                    navController.popBackStack()
+                    if (!navController.popBackStack()) {
+                        navController.navigate(exploreRoute) {
+                            popUpTo(authRoute) { inclusive = true }
+                        }
+                    }
                 }
             )
         }
 
-        // Tour Detail
         composable(
             route = tourDetailRouteWithArgs,
             arguments = listOf(navArgument("tourId") { type = NavType.StringType })
@@ -118,6 +119,7 @@ fun TourryNavHost(
             )
         ) { backStackEntry ->
             val editingTourId = backStackEntry.arguments?.getString("tourId")
+            // TODO: add editingTourId
             TourCreationRoute(
                 onNavigateBack = {
                     navController.popBackStack()
@@ -180,20 +182,6 @@ fun TourryNavHost(
                     }
                 }
             )
-        }
-
-        // Analytics Screen (placeholder for future implementation)
-        composable("analytics") {
-            // TODO: Implement analytics screen
-            // For now, just navigate back
-            navController.popBackStack()
-        }
-
-        // Help Screen (placeholder for future implementation)
-        composable("help") {
-            // TODO: Implement help screen
-            // For now, just navigate back
-            navController.popBackStack()
         }
     }
 }

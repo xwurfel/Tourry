@@ -41,6 +41,7 @@ timber = "5.0.1"
 uiTextGoogleFonts = "1.8.0"
 window = "1.4.0"
 workRuntimeKtx = "2.10.1"
+firebaseFirestoreKtx = "25.1.4"
 
 
 [libraries]
@@ -98,6 +99,7 @@ androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = 
 retrofit = { module = "com.squareup.retrofit2:retrofit", version.ref = "retrofit" }
 retrofit2-kotlinx-serialization-converter = { module = "com.jakewharton.retrofit:retrofit2-kotlinx-serialization-converter", version.ref = "retrofit2KotlinxSerializationConverter" }
 timber = { module = "com.jakewharton.timber:timber", version.ref = "timber" }
+firebase-firestore-ktx = { group = "com.google.firebase", name = "firebase-firestore-ktx", version.ref = "firebaseFirestoreKtx" }
 
 
 [plugins]

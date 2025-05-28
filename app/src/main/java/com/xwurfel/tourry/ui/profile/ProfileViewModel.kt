@@ -3,6 +3,7 @@ package com.xwurfel.tourry.ui.profile
 import com.xwurfel.tourry.core.domain.util.onFailure
 import com.xwurfel.tourry.core.domain.util.onSuccess
 import com.xwurfel.tourry.core.ui.MviViewModel
+import com.xwurfel.tourry.feature.mock.MockDataManager
 import com.xwurfel.tourry.feature.profile.domain.model.User
 import com.xwurfel.tourry.feature.profile.domain.model.UserSettings
 import com.xwurfel.tourry.feature.profile.domain.model.UserStats
@@ -25,7 +26,8 @@ class ProfileViewModel @Inject constructor(
     private val observeUserStatsUseCase: ObserveUserStatsUseCase,
     private val observeUserSettingsUseCase: ObserveUserSettingsUseCase,
     private val signOutUseCase: SignOutUseCase,
-    private val updateUserSettingsUseCase: UpdateUserSettingsUseCase
+    private val updateUserSettingsUseCase: UpdateUserSettingsUseCase,
+    private val mockDataManager: MockDataManager // Keep for now during transition
 ) : MviViewModel<ProfileUiState, ProfilePartialState, ProfileEvent, ProfileIntent>(
     initialState = ProfileUiState()
 ) {
@@ -39,32 +41,38 @@ class ProfileViewModel @Inject constructor(
     override fun mapIntents(intent: ProfileIntent): Flow<ProfilePartialState> = flow {
         when (intent) {
             ProfileIntent.SignIn -> {
-                // Navigate to auth screen - handled by navigation
-                // We don't have a direct sign-in use case anymore since it's handled by AuthViewModel
-                emit(ProfilePartialState.Error("Please use the auth screen to sign in"))
+                emit(ProfilePartialState.Loading(true))
+                try {
+                    val userId = "demo_user_${System.currentTimeMillis()}"
+                    mockDataManager.signIn(userId)
+
+                    emit(ProfilePartialState.Loading(false))
+                } catch (e: Exception) {
+                    emit(ProfilePartialState.Loading(false))
+                    emit(ProfilePartialState.Error("Failed to sign in: ${e.message}"))
+                }
             }
 
             ProfileIntent.SignOut -> {
                 emit(ProfilePartialState.Loading(true))
-                signOutUseCase()
-                    .onSuccess {
-                        emit(ProfilePartialState.Loading(false))
-                        // User data will be cleared via observeUserData flow
-                    }
-                    .onFailure { error ->
-                        emit(ProfilePartialState.Loading(false))
-                        emit(ProfilePartialState.Error(error.msg.toString()))
-                    }
+
+                signOutUseCase().onSuccess {
+                    mockDataManager.signOut()
+                    emit(ProfilePartialState.Loading(false))
+                }.onFailure { error ->
+                    mockDataManager.signOut()
+                    emit(ProfilePartialState.Loading(false))
+                    emit(ProfilePartialState.Error(error.msg.toString()))
+                }
             }
 
             is ProfileIntent.UpdateNotificationSettings -> {
                 val currentSettings = uiStateSnapshot.value.userSettings
                 val updatedSettings = currentSettings.copy(notificationsEnabled = intent.enabled)
 
-                updateUserSettingsUseCase(updatedSettings)
-                    .onFailure { error ->
-                        emit(ProfilePartialState.Error(error.msg.toString()))
-                    }
+                updateUserSettingsUseCase(updatedSettings).onFailure { error ->
+                    emit(ProfilePartialState.Error(error.msg.toString()))
+                }
             }
 
             is ProfileIntent.UpdateLocationPermission -> {
@@ -72,10 +80,9 @@ class ProfileViewModel @Inject constructor(
                 val updatedSettings =
                     currentSettings.copy(locationPermissionGranted = intent.granted)
 
-                updateUserSettingsUseCase(updatedSettings)
-                    .onFailure { error ->
-                        emit(ProfilePartialState.Error(error.msg.toString()))
-                    }
+                updateUserSettingsUseCase(updatedSettings).onFailure { error ->
+                    emit(ProfilePartialState.Error(error.msg.toString()))
+                }
             }
 
             ProfileIntent.NavigateToCreateTour -> {
@@ -89,13 +96,11 @@ class ProfileViewModel @Inject constructor(
     }
 
     override fun reduceUiState(
-        previousState: ProfileUiState,
-        partialState: ProfilePartialState
+        previousState: ProfileUiState, partialState: ProfilePartialState
     ): ProfileUiState {
         return when (partialState) {
             is ProfilePartialState.Loading -> previousState.copy(
-                isLoading = partialState.isLoading,
-                error = null
+                isLoading = partialState.isLoading, error = null
             )
 
             is ProfilePartialState.UserDataLoaded -> previousState.copy(
@@ -108,32 +113,38 @@ class ProfileViewModel @Inject constructor(
             )
 
             is ProfilePartialState.Error -> previousState.copy(
-                isLoading = false,
-                error = partialState.message
+                isLoading = false, error = partialState.message
             )
         }
     }
 
-    private fun observeUserData(): Flow<ProfilePartialState> = flow {
-        combine(
-            observeCurrentUserUseCase(),
-            observeAuthenticationStateUseCase(),
-            observeUserStatsUseCase(),
-            observeUserSettingsUseCase()
-        ) { user, isAuthenticated, stats, settings ->
-            ProfilePartialState.UserDataLoaded(
-                user = user,
-                isAuthenticated = isAuthenticated,
-                stats = stats,
-                settings = settings
-            )
-        }.collect { partialState ->
-            emit(partialState)
-        }
+    private fun observeUserData(): Flow<ProfilePartialState> = combine(
+        observeCurrentUserUseCase(),
+        observeAuthenticationStateUseCase(),
+        observeUserStatsUseCase(),
+        observeUserSettingsUseCase(),
+        mockDataManager.isAuthenticated,
+        mockDataManager.currentUserProfile
+    ) { values: Array<Any?> ->
+        val firebaseUser = values[0] as User?
+        val isFirebaseAuth = values[1] as Boolean
+        val firebaseStats = values[2] as UserStats?
+        val firebaseSettings = values[3] as UserSettings
+        val isMockAuth = values[4] as Boolean
+        val mockUser = values[5] as User?
+
+        val user = firebaseUser ?: mockUser
+        val isAuthenticated = isFirebaseAuth || isMockAuth
+        val stats = firebaseStats ?: user?.stats
+        val settings = firebaseSettings
+
+        ProfilePartialState.UserDataLoaded(
+            user = user, isAuthenticated = isAuthenticated, stats = stats, settings = settings
+        )
     }
 }
 
-// States
+// States remain the same
 data class ProfileUiState(
     val user: User? = null,
     val userStats: UserStats? = null,

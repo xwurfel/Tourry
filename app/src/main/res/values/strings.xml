@@ -50,4 +50,16 @@
     <string name="clear">clear</string>
     <string name="edit_tour_title">Edit tour</string>
     <string name="update_tour">Update tour</string>
+
+    <!-- Auth related strings -->
+    <string name="auth_google_sign_in_failed">Google sign-in failed</string>
+    <string name="auth_sign_in_failed">Sign-in failed</string>
+    <string name="auth_account_creation_failed">Account creation failed</string>
+    <string name="auth_password_reset_failed">Password reset failed</string>
+    <string name="auth_network_error">Network error. Please check your connection.</string>
+    <string name="auth_invalid_credentials">Invalid email or password</string>
+    <string name="auth_user_disabled">This account has been disabled</string>
+    <string name="auth_weak_password">Password is too weak</string>
+    <string name="auth_email_already_in_use">Email is already registered</string>
+    <string name="auth_invalid_email">Invalid email address</string>
 </resources>

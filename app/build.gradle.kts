@@ -126,7 +126,7 @@ dependencies {
     implementation(libs.firebase.database)
     implementation(libs.firebase.messaging.ktx)
     implementation(libs.firebase.auth)
-
+    implementation(libs.firebase.firestore.ktx)
 
     //Datastore
     implementation(libs.androidx.datastore.preferences)

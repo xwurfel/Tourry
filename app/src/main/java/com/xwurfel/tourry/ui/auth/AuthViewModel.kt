@@ -161,10 +161,6 @@ class AuthViewModel @Inject constructor(
             )
         }
     }
-
-    fun onGoogleSignInLaunched() {
-        // Google Sign-In launched, handled by UI state
-    }
 }
 
 // Updated States

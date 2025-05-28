@@ -8,5 +8,5 @@ import javax.inject.Inject
 class SignInUseCase @Inject constructor(
     private val userRepository: UserRepository
 ) {
-    suspend operator fun invoke(): DomainResult<User> = userRepository.signIn()
+    suspend operator fun invoke(): DomainResult<User> = userRepository.signInWithGoogle()
 }
