@@ -1,6 +1,7 @@
 package com.xwurfel.tourry.ui.profile
 
 import android.content.Intent
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,6 +19,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Help
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Analytics
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
@@ -28,6 +30,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Tour
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -35,11 +38,13 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -72,6 +77,8 @@ import com.xwurfel.tourry.ui.profile.components.ProfileEditDialog
 @Composable
 fun ProfileRoute(
     onNavigateToAuth: () -> Unit,
+    onNavigateToTourCreation: () -> Unit,
+    onNavigateToMyTours: () -> Unit,
     viewModel: ProfileViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -81,21 +88,24 @@ fun ProfileRoute(
     viewModel.event.collectWithLifecycle { event ->
         when (event) {
             ProfileEvent.NavigateToAuth -> onNavigateToAuth()
+            ProfileEvent.NavigateToTourCreation -> onNavigateToTourCreation()
+            ProfileEvent.NavigateToMyTours -> onNavigateToMyTours()
             ProfileEvent.NavigateToEditProfile -> {
                 // Handled by showEditDialog state
             }
 
             ProfileEvent.NavigateToAnalytics -> {
-                // TODO: Navigate to analytics screen
+                // TODO: Navigate to analytics screen when implemented
             }
 
             ProfileEvent.NavigateToHelp -> {
-                // TODO: Navigate to help screen
+                // TODO: Navigate to help screen when implemented
             }
 
             is ProfileEvent.ShareProfile -> {
                 // Create share intent
-                val shareText = "Check out ${event.user.name}'s profile on Tourry!"
+                val shareText =
+                    "Check out ${event.user.name}'s profile on Tourry! They've created ${event.user.stats?.toursCreated ?: 0} tours and joined ${event.user.stats?.toursJoined ?: 0} experiences."
                 val shareIntent = Intent().apply {
                     action = Intent.ACTION_SEND
                     putExtra(Intent.EXTRA_TEXT, shareText)
@@ -106,10 +116,16 @@ fun ProfileRoute(
         }
     }
 
-    // Show error messages
+    // Show success/error messages
     LaunchedEffect(uiState.error) {
         uiState.error?.let { error ->
             snackbarHostState.showSnackbar(error)
+        }
+    }
+
+    LaunchedEffect(uiState.isProfileUpdated) {
+        if (uiState.isProfileUpdated) {
+            snackbarHostState.showSnackbar("Profile updated successfully!")
         }
     }
 
@@ -136,7 +152,10 @@ fun ProfileScreen(
             TopAppBar(
                 title = { Text(stringResource(R.string.nav_profile)) },
                 actions = {
-                    IconButton(onClick = { onIntent(ProfileIntent.RefreshProfile) }) {
+                    IconButton(
+                        onClick = { onIntent(ProfileIntent.RefreshProfile) },
+                        enabled = !uiState.isLoading
+                    ) {
                         Icon(
                             Icons.Default.Refresh,
                             contentDescription = "Refresh",
@@ -159,36 +178,30 @@ fun ProfileScreen(
                 }
             )
         },
+        floatingActionButton = {
+            if (uiState.user != null) {
+                ExtendedFloatingActionButton(
+                    onClick = { onIntent(ProfileIntent.CreateTour) },
+                    icon = { Icon(Icons.Default.Add, contentDescription = null) },
+                    text = { Text("Create Tour") },
+                    containerColor = MaterialTheme.colorScheme.primary
+                )
+            }
+        },
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { paddingValues ->
         if (uiState.isLoading && uiState.user == null) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    CircularProgressIndicator()
-                    Text(
-                        "Loading profile...",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
+            LoadingProfileSection(paddingValues)
         } else {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
                     .padding(paddingValues)
+                    .padding(bottom = 88.dp) // Account for FAB
             ) {
                 if (uiState.user != null) {
-                    // User profile section
+                    // Authenticated user content
                     UserProfileSection(
                         user = uiState.user,
                         onEditClick = { showEditDialog = true }
@@ -196,8 +209,17 @@ fun ProfileScreen(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // Stats section
-                    UserStatsSection(stats = uiState.userStats)
+                    // Enhanced Stats section
+                    UserStatsSection(
+                        stats = uiState.userStats,
+                        onMyToursClick = { onIntent(ProfileIntent.ViewMyTours) },
+                        onCreateTourClick = { onIntent(ProfileIntent.CreateTour) }
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Quick Actions
+                    QuickActionsSection(onIntent = onIntent)
 
                     Spacer(modifier = Modifier.height(16.dp))
                 } else {
@@ -205,6 +227,8 @@ fun ProfileScreen(
                     GuestProfileSection(
                         onSignInClick = { onIntent(ProfileIntent.SignIn) }
                     )
+
+                    Spacer(modifier = Modifier.height(16.dp))
                 }
 
                 // Settings and options
@@ -220,93 +244,38 @@ fun ProfileScreen(
         }
     }
 
-    // Profile Edit Dialog
-    if (showEditDialog && uiState.user != null) {
-        ProfileEditDialog(
-            user = uiState.user,
-            isUpdating = uiState.isUpdatingProfile,
-            isUploadingAvatar = uiState.isUploadingAvatar,
-            onDismiss = { showEditDialog = false },
-            onSave = { updatedProfile ->
-                onIntent(ProfileIntent.UpdateProfile(updatedProfile))
-                showEditDialog = false
-            },
-            onUploadAvatar = { imageUri ->
-                onIntent(ProfileIntent.UploadAvatar(imageUri))
-            }
-        )
-    }
+    // Dialogs
+    ProfileDialogs(
+        uiState = uiState,
+        showEditDialog = showEditDialog,
+        showDeleteDialog = showDeleteDialog,
+        showSignOutDialog = showSignOutDialog,
+        onEditDialogDismiss = { showEditDialog = false },
+        onDeleteDialogDismiss = { showDeleteDialog = false },
+        onSignOutDialogDismiss = { showSignOutDialog = false },
+        onIntent = onIntent
+    )
+}
 
-    // Sign Out Confirmation Dialog
-    if (showSignOutDialog) {
-        AlertDialog(
-            onDismissRequest = { showSignOutDialog = false },
-            title = { Text("Sign Out") },
-            text = { Text("Are you sure you want to sign out? You can always sign back in later.") },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        showSignOutDialog = false
-                        onIntent(ProfileIntent.SignOut)
-                    }
-                ) {
-                    Text("Sign Out")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showSignOutDialog = false }) {
-                    Text("Cancel")
-                }
-            }
-        )
-    }
-
-    // Delete Account Confirmation Dialog
-    if (showDeleteDialog) {
-        AlertDialog(
-            onDismissRequest = { showDeleteDialog = false },
-            title = { Text("Delete Account") },
-            text = {
-                Column {
-                    Text("This action cannot be undone. All your data will be permanently deleted including:")
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text("• Your profile and account information")
-                    Text("• All tours you've created")
-                    Text("• Your tour history and statistics")
-                    Text("• All reviews and ratings")
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        showDeleteDialog = false
-                        onIntent(ProfileIntent.DeleteAccount)
-                    },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.error
-                    ),
-                    enabled = !uiState.isDeletingAccount
-                ) {
-                    if (uiState.isDeletingAccount) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.onError
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                    }
-                    Text("Delete Account")
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = { showDeleteDialog = false },
-                    enabled = !uiState.isDeletingAccount
-                ) {
-                    Text("Cancel")
-                }
-            }
-        )
+@Composable
+private fun LoadingProfileSection(paddingValues: androidx.compose.foundation.layout.PaddingValues) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(paddingValues),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            CircularProgressIndicator()
+            Text(
+                "Loading your profile...",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
 }
 
@@ -318,7 +287,8 @@ fun UserProfileSection(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = 16.dp)
+            .animateContentSize(),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant
         )
@@ -332,7 +302,7 @@ fun UserProfileSection(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Profile picture
+                // Profile picture with loading state
                 Surface(
                     modifier = Modifier.size(72.dp),
                     shape = CircleShape,
@@ -397,7 +367,12 @@ fun UserProfileSection(
                                 tint = MaterialTheme.colorScheme.primary
                             )
                             Text(
-                                text = "${user.rating} • ${user.reviewsCount} reviews",
+                                text = "${
+                                    String.format(
+                                        "%.1f",
+                                        user.rating
+                                    )
+                                } • ${user.reviewsCount} reviews",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -410,9 +385,11 @@ fun UserProfileSection(
 }
 
 @Composable
-fun UserStatsSection(stats: UserStats?) {
-    if (stats == null) return
-
+fun UserStatsSection(
+    stats: UserStats?,
+    onMyToursClick: () -> Unit,
+    onCreateTourClick: () -> Unit
+) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -421,39 +398,110 @@ fun UserStatsSection(stats: UserStats?) {
         Column(
             modifier = Modifier.padding(16.dp)
         ) {
-            Text(
-                "Your Activity",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Medium
-            )
-            Spacer(modifier = Modifier.height(12.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                StatItem(
-                    label = "Tours Created",
-                    value = stats.toursCreated.toString()
+                Text(
+                    "Your Activity",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Medium
                 )
-                StatItem(
-                    label = "Tours Joined",
-                    value = stats.toursJoined.toString()
-                )
-                StatItem(
-                    label = "Total Participants",
-                    value = stats.totalParticipants.toString()
-                )
+
+                TextButton(onClick = onMyToursClick) {
+                    Text("View All")
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            if (stats != null) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    StatItem(
+                        label = "Tours Created",
+                        value = stats.toursCreated.toString(),
+                        icon = Icons.Default.Add,
+                        onClick = onCreateTourClick
+                    )
+                    StatItem(
+                        label = "Tours Joined",
+                        value = stats.toursJoined.toString(),
+                        icon = Icons.Default.Tour,
+                        onClick = onMyToursClick
+                    )
+                    StatItem(
+                        label = "Total Participants",
+                        value = stats.totalParticipants.toString(),
+                        icon = Icons.Default.Person,
+                        onClick = null
+                    )
+                }
+            } else {
+                // Loading skeleton
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    repeat(3) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                strokeWidth = 2.dp
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                "...",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
             }
         }
     }
 }
 
 @Composable
-fun StatItem(label: String, value: String) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+fun StatItem(
+    label: String,
+    value: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    onClick: (() -> Unit)?
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = if (onClick != null) {
+            Modifier
+        } else {
+            Modifier
+        }
+    ) {
+        Surface(
+            modifier = Modifier.size(40.dp),
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.primaryContainer,
+            onClick = onClick ?: {}
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
         Text(
             text = value,
-            style = MaterialTheme.typography.headlineMedium,
+            style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.primary
         )
@@ -463,6 +511,49 @@ fun StatItem(label: String, value: String) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
         )
+    }
+}
+
+@Composable
+fun QuickActionsSection(onIntent: (ProfileIntent) -> Unit) {
+    Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+        Text(
+            "Quick Actions",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.padding(vertical = 8.dp)
+        )
+
+        OutlinedCard {
+            Column {
+                ListItem(
+                    headlineContent = { Text("Create New Tour") },
+                    supportingContent = { Text("Share your favorite places with others") },
+                    leadingContent = {
+                        Icon(
+                            Icons.Default.Add,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                HorizontalDivider()
+
+                ListItem(
+                    headlineContent = { Text("View My Tours") },
+                    supportingContent = { Text("Manage your created and joined tours") },
+                    leadingContent = {
+                        Icon(
+                            Icons.Default.Tour,
+                            contentDescription = null
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
     }
 }
 
@@ -488,7 +579,7 @@ fun GuestProfileSection(onSignInClick: () -> Unit) {
             )
             Spacer(modifier = Modifier.height(12.dp))
             Text(
-                "Welcome, Guest!",
+                "Welcome to Tourry!",
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onPrimaryContainer
@@ -640,8 +731,7 @@ fun SettingsSection(
                                 tint = MaterialTheme.colorScheme.error
                             )
                         },
-                        modifier = Modifier
-                            .fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth()
                     )
 
                     HorizontalDivider()
@@ -667,11 +757,111 @@ fun SettingsSection(
                                 tint = MaterialTheme.colorScheme.error
                             )
                         },
-                        modifier = Modifier
-                            .fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth()
                     )
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun ProfileDialogs(
+    uiState: ProfileUiState,
+    showEditDialog: Boolean,
+    showDeleteDialog: Boolean,
+    showSignOutDialog: Boolean,
+    onEditDialogDismiss: () -> Unit,
+    onDeleteDialogDismiss: () -> Unit,
+    onSignOutDialogDismiss: () -> Unit,
+    onIntent: (ProfileIntent) -> Unit
+) {
+    // Profile Edit Dialog
+    if (showEditDialog && uiState.user != null) {
+        ProfileEditDialog(
+            user = uiState.user,
+            isUpdating = uiState.isUpdatingProfile,
+            isUploadingAvatar = uiState.isUploadingAvatar,
+            onDismiss = onEditDialogDismiss,
+            onSave = { updatedProfile ->
+                onIntent(ProfileIntent.UpdateProfile(updatedProfile))
+                onEditDialogDismiss()
+            },
+            onUploadAvatar = { imageUri ->
+                onIntent(ProfileIntent.UploadAvatar(imageUri))
+            }
+        )
+    }
+
+    // Sign Out Confirmation Dialog
+    if (showSignOutDialog) {
+        AlertDialog(
+            onDismissRequest = onSignOutDialogDismiss,
+            title = { Text("Sign Out") },
+            text = { Text("Are you sure you want to sign out? You can always sign back in later.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onSignOutDialogDismiss()
+                        onIntent(ProfileIntent.SignOut)
+                    }
+                ) {
+                    Text("Sign Out")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = onSignOutDialogDismiss) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // Delete Account Confirmation Dialog
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = onDeleteDialogDismiss,
+            title = { Text("Delete Account") },
+            text = {
+                Column {
+                    Text("This action cannot be undone. All your data will be permanently deleted including:")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("• Your profile and account information")
+                    Text("• All tours you've created")
+                    Text("• Your tour history and statistics")
+                    Text("• All reviews and ratings")
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onDeleteDialogDismiss()
+                        onIntent(ProfileIntent.DeleteAccount)
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error
+                    ),
+                    enabled = !uiState.isDeletingAccount
+                ) {
+                    if (uiState.isDeletingAccount) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onError
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                    }
+                    Text("Delete Account")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = onDeleteDialogDismiss,
+                    enabled = !uiState.isDeletingAccount
+                ) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }

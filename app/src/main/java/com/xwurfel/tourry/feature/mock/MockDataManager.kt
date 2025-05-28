@@ -21,7 +21,7 @@ import javax.inject.Singleton
 import kotlin.random.Random
 
 /**
- * Enhanced MockDataManager with full profile support
+ * Enhanced MockDataManager with comprehensive profile support and realistic data generation
  */
 @Singleton
 class MockDataManager @Inject constructor() {
@@ -38,7 +38,7 @@ class MockDataManager @Inject constructor() {
     private val _createdTours = MutableStateFlow<List<MyTour>>(generateInitialCreatedTours())
     val createdTours: StateFlow<List<MyTour>> = _createdTours.asStateFlow()
 
-    // User state
+    // Enhanced User state
     private val _isAuthenticated = MutableStateFlow(false)
     val isAuthenticated: StateFlow<Boolean> = _isAuthenticated.asStateFlow()
 
@@ -62,9 +62,10 @@ class MockDataManager @Inject constructor() {
     private val _liveTours = MutableStateFlow<Set<String>>(emptySet())
     val liveTours: StateFlow<Set<String>> = _liveTours.asStateFlow()
 
-    // User profiles storage (simulates backend)
+    // Enhanced user data storage
     private val userProfiles = mutableMapOf<String, UserProfile>()
     private val userStatsMap = mutableMapOf<String, UserStats>()
+    private val userPreferences = mutableMapOf<String, UserPreferences>()
 
     init {
         startLiveTourSimulation()
@@ -72,10 +73,14 @@ class MockDataManager @Inject constructor() {
         seedMockUserData()
     }
 
-    // Profile Management
+    // Enhanced Profile Management
     suspend fun loadUserProfile(userId: String): UserProfile? {
         delay(800) // Simulate network delay
-        return userProfiles[userId]
+        return userProfiles[userId]?.let { profile ->
+            // Always return profile with latest stats
+            val stats = userStatsMap[userId]
+            profile.copy(stats = stats)
+        }
     }
 
     suspend fun loadUserStats(userId: String): UserStats? {
@@ -87,8 +92,22 @@ class MockDataManager @Inject constructor() {
         delay(1000) // Simulate network delay
 
         return try {
+            // Store the updated profile
             userProfiles[userId] = profile
-            _currentUserProfile.value = profile
+
+            // Update the current profile state with embedded stats
+            val currentStats = userStatsMap[userId]
+            val profileWithStats = profile.copy(stats = currentStats)
+            _currentUserProfile.value = profileWithStats
+
+            // Simulate profile validation
+            if (profile.name.isBlank()) {
+                throw IllegalArgumentException("Name cannot be empty")
+            }
+            if (profile.email.isNotBlank() && !isValidEmail(profile.email)) {
+                throw IllegalArgumentException("Invalid email format")
+            }
+
             true
         } catch (e: Exception) {
             false
@@ -98,18 +117,27 @@ class MockDataManager @Inject constructor() {
     suspend fun uploadProfileAvatar(userId: String, imageUri: String): String? {
         delay(2000) // Simulate upload time
 
-        // Simulate successful upload and return a mock URL
-        val mockAvatarUrl =
-            "https://mock-cdn.example.com/avatars/${userId}_${System.currentTimeMillis()}.jpg"
+        return try {
+            // Simulate upload success/failure (95% success rate)
+            if (Random.nextFloat() < 0.95f) {
+                // Generate a realistic mock URL
+                val mockAvatarUrl =
+                    "https://api.tourry.app/avatars/${userId}_${System.currentTimeMillis()}.jpg"
 
-        // Update the current profile with new avatar
-        _currentUserProfile.value?.let { currentProfile ->
-            val updatedProfile = currentProfile.copy(avatarUrl = mockAvatarUrl)
-            userProfiles[userId] = updatedProfile
-            _currentUserProfile.value = updatedProfile
+                // Update the current profile with new avatar
+                _currentUserProfile.value?.let { currentProfile ->
+                    val updatedProfile = currentProfile.copy(avatarUrl = mockAvatarUrl)
+                    userProfiles[userId] = updatedProfile
+                    _currentUserProfile.value = updatedProfile
+                }
+
+                mockAvatarUrl
+            } else {
+                null // Simulate upload failure
+            }
+        } catch (e: Exception) {
+            null
         }
-
-        return mockAvatarUrl
     }
 
     suspend fun deleteAccount(userId: String): Boolean {
@@ -119,6 +147,18 @@ class MockDataManager @Inject constructor() {
             // Remove user data
             userProfiles.remove(userId)
             userStatsMap.remove(userId)
+            userPreferences.remove(userId)
+
+            // Remove user's created tours
+            val userCreatedTours = _createdTours.value.filter {
+                it.id.startsWith("created_${userId}_")
+            }
+            _createdTours.value = _createdTours.value.filterNot {
+                it.id.startsWith("created_${userId}_")
+            }
+
+            // Remove user from joined tours
+            _joinedTourIds.value = emptySet()
 
             // Sign out user
             signOut()
@@ -128,20 +168,30 @@ class MockDataManager @Inject constructor() {
         }
     }
 
-    // Settings Management
+    // Enhanced Settings Management
     suspend fun updateNotificationSettings(enabled: Boolean): Boolean {
         delay(300)
+        val currentUserId = _currentUserId.value
+        if (currentUserId != null) {
+            val prefs = userPreferences[currentUserId] ?: UserPreferences()
+            userPreferences[currentUserId] = prefs.copy(notificationsEnabled = enabled)
+        }
         _notificationsEnabled.value = enabled
         return true
     }
 
     suspend fun updateLocationSharingSettings(enabled: Boolean): Boolean {
         delay(300)
+        val currentUserId = _currentUserId.value
+        if (currentUserId != null) {
+            val prefs = userPreferences[currentUserId] ?: UserPreferences()
+            userPreferences[currentUserId] = prefs.copy(locationSharingEnabled = enabled)
+        }
         _locationSharingEnabled.value = enabled
         return true
     }
 
-    // Authentication
+    // Enhanced Authentication
     fun signIn(userId: String, userType: String = "email") {
         _isAuthenticated.value = true
         _currentUserId.value = userId
@@ -150,9 +200,15 @@ class MockDataManager @Inject constructor() {
             // Load or create user profile
             val profile = loadUserProfile(userId) ?: createDefaultProfile(userId, userType)
             val stats = loadUserStats(userId) ?: createDefaultStats(userId)
+            val prefs = userPreferences[userId] ?: UserPreferences()
 
-            _currentUserProfile.value = profile
+            _currentUserProfile.value = profile.copy(stats = stats)
             _userStats.value = stats
+            _notificationsEnabled.value = prefs.notificationsEnabled
+            _locationSharingEnabled.value = prefs.locationSharingEnabled
+
+            // Load user's created and joined tours
+            loadUserTours(userId)
         }
     }
 
@@ -162,23 +218,30 @@ class MockDataManager @Inject constructor() {
         _currentUserProfile.value = null
         _userStats.value = null
         _joinedTourIds.value = emptySet()
+        _notificationsEnabled.value = true
+        _locationSharingEnabled.value = true
     }
 
-    // Analytics and Statistics
+    // Enhanced Analytics and Statistics
     fun trackProfileView(viewedUserId: String) {
         scope.launch {
-            // Simulate analytics tracking
             println("Analytics: Profile viewed - User: $viewedUserId")
+            // Could increment profile view count here
         }
     }
 
     fun trackProfileEdit(userId: String, changedFields: List<String>) {
         scope.launch {
             println("Analytics: Profile edited - User: $userId, Fields: $changedFields")
+            // Update user engagement metrics
+            val currentStats = userStatsMap[userId]
+            if (currentStats != null) {
+                // Could track profile completeness, last edit time, etc.
+            }
         }
     }
 
-    // Existing methods remain the same...
+    // Existing tour methods (keeping same functionality)
     fun getTourDetail(tourId: String): TourDetail? {
         return when (tourId) {
             "1" -> createTourDetail1()
@@ -199,8 +262,8 @@ class MockDataManager @Inject constructor() {
 
     suspend fun joinTour(tourId: String): Boolean {
         delay(500)
-        val tourExists = _availableTours.value.any { it.id == tourId } ||
-                _createdTours.value.any { it.id == tourId }
+        val tourExists =
+            _availableTours.value.any { it.id == tourId } || _createdTours.value.any { it.id == tourId }
 
         if (!tourExists) return false
 
@@ -221,14 +284,11 @@ class MockDataManager @Inject constructor() {
     }
 
     suspend fun createTour(
-        title: String,
-        description: String,
-        stops: List<Any>,
-        startDateTime: Long?,
-        price: Double
+        title: String, description: String, stops: List<Any>, startDateTime: Long?, price: Double
     ): String {
         delay(1000)
-        val newTourId = "created_${System.currentTimeMillis()}"
+        val currentUserId = _currentUserId.value ?: "anonymous"
+        val newTourId = "created_${currentUserId}_${System.currentTimeMillis()}"
 
         val newCreatedTour = MyTour(
             id = newTourId,
@@ -261,7 +321,7 @@ class MockDataManager @Inject constructor() {
         _availableTours.value = updatedAvailableTours
 
         // Update user stats
-        _currentUserId.value?.let { userId ->
+        currentUserId.let { userId ->
             updateUserStatsAfterCreate(userId)
         }
 
@@ -272,26 +332,25 @@ class MockDataManager @Inject constructor() {
         val joinedIds = _joinedTourIds.value
         val currentTime = System.currentTimeMillis()
 
-        return _availableTours.value
-            .filter { it.id in joinedIds }
-            .map { tour ->
-                val status = when {
-                    tour.id in _liveTours.value -> TourStatus.LIVE
-                    tour.startTime > currentTime -> TourStatus.UPCOMING
-                    else -> TourStatus.COMPLETED
-                }
-
-                MyTour(
-                    id = tour.id,
-                    title = tour.title,
-                    coverImageUrl = tour.coverImageUrl,
-                    startTime = tour.startTime,
-                    status = status,
-                    participantsCount = Random.nextInt(3, 15),
-                    rating = if (status == TourStatus.COMPLETED)
-                        (4.0f + Random.nextFloat()).coerceAtMost(5.0f) else null
-                )
+        return _availableTours.value.filter { it.id in joinedIds }.map { tour ->
+            val status = when {
+                tour.id in _liveTours.value -> TourStatus.LIVE
+                tour.startTime > currentTime -> TourStatus.UPCOMING
+                else -> TourStatus.COMPLETED
             }
+
+            MyTour(
+                id = tour.id,
+                title = tour.title,
+                coverImageUrl = tour.coverImageUrl,
+                startTime = tour.startTime,
+                status = status,
+                participantsCount = Random.nextInt(3, 15),
+                rating = if (status == TourStatus.COMPLETED) (4.0f + Random.nextFloat()).coerceAtMost(
+                    5.0f
+                ) else null
+            )
+        }
     }
 
     suspend fun cancelTour(tourId: String): Boolean {
@@ -312,8 +371,8 @@ class MockDataManager @Inject constructor() {
                 id = userId,
                 name = "John Doe",
                 email = "john.doe@gmail.com",
-                avatarUrl = null,
-                bio = "Travel enthusiast and local explorer",
+                avatarUrl = generateRandomAvatarUrl(),
+                bio = "Travel enthusiast and local explorer. I love discovering hidden gems and sharing unique experiences with fellow adventurers.",
                 rating = 4.8f,
                 reviewsCount = 23
             )
@@ -322,8 +381,8 @@ class MockDataManager @Inject constructor() {
                 id = userId,
                 name = "Jane Smith",
                 email = "jane.smith@example.com",
-                avatarUrl = null,
-                bio = "I love discovering hidden gems in my city",
+                avatarUrl = generateRandomAvatarUrl(),
+                bio = "I love discovering hidden gems in my city and creating memorable experiences for others to enjoy.",
                 rating = 4.6f,
                 reviewsCount = 15
             )
@@ -340,12 +399,12 @@ class MockDataManager @Inject constructor() {
 
             else -> UserProfile(
                 id = userId,
-                name = "Tour Guide",
-                email = "guide@example.com",
-                avatarUrl = null,
-                bio = "Professional tour guide with 5+ years experience",
+                name = generateRandomName(),
+                email = "${userId.lowercase()}@example.com",
+                avatarUrl = generateRandomAvatarUrl(),
+                bio = generateRandomBio(),
                 rating = 4.9f,
-                reviewsCount = 67
+                reviewsCount = Random.nextInt(30, 100)
             )
         }
 
@@ -358,13 +417,21 @@ class MockDataManager @Inject constructor() {
             UserStats(
                 toursCreated = 0,
                 toursJoined = 0,
-                totalParticipants = 0
+                totalParticipants = 0,
+                totalRatings = 0f,
+                averageRating = 0f
             )
         } else {
+            val toursCreated = Random.nextInt(0, 12)
+            val toursJoined = Random.nextInt(5, 25)
+            val totalParticipants = Random.nextInt(10, 150)
+
             UserStats(
-                toursCreated = Random.nextInt(0, 8),
-                toursJoined = Random.nextInt(5, 25),
-                totalParticipants = Random.nextInt(10, 150)
+                toursCreated = toursCreated,
+                toursJoined = toursJoined,
+                totalParticipants = totalParticipants,
+                totalRatings = Random.nextFloat() * 50,
+                averageRating = 4.0f + Random.nextFloat()
             )
         }
 
@@ -377,6 +444,11 @@ class MockDataManager @Inject constructor() {
         val updatedStats = currentStats.copy(toursJoined = currentStats.toursJoined + 1)
         userStatsMap[userId] = updatedStats
         _userStats.value = updatedStats
+
+        // Update profile with new stats
+        _currentUserProfile.value?.let { profile ->
+            _currentUserProfile.value = profile.copy(stats = updatedStats)
+        }
     }
 
     private fun updateUserStatsAfterCreate(userId: String) {
@@ -384,17 +456,94 @@ class MockDataManager @Inject constructor() {
         val updatedStats = currentStats.copy(toursCreated = currentStats.toursCreated + 1)
         userStatsMap[userId] = updatedStats
         _userStats.value = updatedStats
-    }
 
-    private fun seedMockUserData() {
-        // Seed some mock users for demo purposes
-        scope.launch {
-            createDefaultProfile("demo_user_1", "email")
-            createDefaultProfile("demo_user_2", "google")
-            createDefaultProfile("demo_user_3", "guest")
+        // Update profile with new stats
+        _currentUserProfile.value?.let { profile ->
+            _currentUserProfile.value = profile.copy(stats = updatedStats)
         }
     }
 
+    private fun loadUserTours(userId: String) {
+        // Load joined tours based on some pattern or stored data
+        val mockJoinedTours = when {
+            userId.startsWith("google_") -> setOf("1", "3", "5")
+            userId.startsWith("email_") -> setOf("2", "4")
+            else -> emptySet()
+        }
+        _joinedTourIds.value = mockJoinedTours
+    }
+
+    private fun seedMockUserData() {
+        scope.launch {
+            // Create a diverse set of mock users for demo
+            val mockUsers = listOf(
+                "demo_creator_1" to "Professional Guide",
+                "demo_creator_2" to "Local Historian",
+                "demo_creator_3" to "Food Blogger",
+                "demo_user_1" to "Travel Enthusiast",
+                "demo_user_2" to "Adventure Seeker"
+            )
+
+            mockUsers.forEach { (userId, type) ->
+                createDefaultProfile(userId, type)
+                createDefaultStats(userId)
+                userPreferences[userId] = UserPreferences()
+            }
+        }
+    }
+
+    // Helper methods for realistic data generation
+    private fun generateRandomAvatarUrl(): String? {
+        return if (Random.nextBoolean()) {
+            "https://images.unsplash.com/photo-${
+                Random.nextInt(
+                    1500000000, 1600000000
+                )
+            }-${
+                Random.nextInt(
+                    100000, 999999
+                )
+            }?ixlib=rb-4.0.3&auto=format&fit=crop&w=150&h=150&q=80"
+        } else {
+            null
+        }
+    }
+
+    private fun generateRandomName(): String {
+        val firstNames = listOf(
+            "Alex", "Jordan", "Casey", "Morgan", "Riley", "Avery", "Quinn", "Sage", "River", "Rowan"
+        )
+        val lastNames = listOf(
+            "Thompson",
+            "Garcia",
+            "Martinez",
+            "Rodriguez",
+            "Wilson",
+            "Anderson",
+            "Taylor",
+            "Brown",
+            "Davis",
+            "Miller"
+        )
+        return "${firstNames.random()} ${lastNames.random()}"
+    }
+
+    private fun generateRandomBio(): String {
+        val bios = listOf(
+            "Passionate about sharing the stories and secrets of my hometown with curious travelers.",
+            "Local expert with 10+ years of experience guiding visitors through hidden gems and must-see spots.",
+            "Food lover and cultural enthusiast who believes the best way to know a place is through its flavors.",
+            "History buff and storyteller who brings the past to life through engaging walking tours.",
+            "Adventure guide specializing in off-the-beaten-path experiences and sustainable tourism."
+        )
+        return bios.random()
+    }
+
+    private fun isValidEmail(email: String): Boolean {
+        return email.contains("@") && email.contains(".")
+    }
+
+    // Existing simulation methods remain the same
     private fun updateTourSpots(tourId: String, delta: Int) {
         val currentTours = _availableTours.value.toMutableList()
         val tourIndex = currentTours.indexOfFirst { it.id == tourId }
@@ -406,11 +555,11 @@ class MockDataManager @Inject constructor() {
     private fun startLiveTourSimulation() {
         scope.launch {
             while (true) {
-                delay(30000)
+                delay(30000) // Check every 30 seconds
                 val currentTime = System.currentTimeMillis()
                 val upcomingTours = _availableTours.value.filter { tour ->
                     val timeDiff = tour.startTime - currentTime
-                    timeDiff in 0..1800000
+                    timeDiff in 0..1800000 // Within 30 minutes
                 }
 
                 val currentlyLive = _liveTours.value.toMutableSet()
@@ -424,7 +573,7 @@ class MockDataManager @Inject constructor() {
                 val toursToRemove = currentlyLive.filter { liveId ->
                     val tour = _availableTours.value.find { it.id == liveId }
                     tour?.let {
-                        currentTime - it.startTime > 10800000
+                        currentTime - it.startTime > 10800000 // 3 hours after start
                     } ?: true
                 }
 
@@ -450,10 +599,10 @@ class MockDataManager @Inject constructor() {
     private fun startDynamicDataUpdates() {
         scope.launch {
             while (true) {
-                delay(60000)
+                delay(60000) // Update every minute
                 val updatedTours = _availableTours.value.map { tour ->
-                    val newRating = (tour.rating + (Random.nextFloat() - 0.5f) * 0.1f)
-                        .coerceIn(3.5f, 5.0f)
+                    val newRating =
+                        (tour.rating + (Random.nextFloat() - 0.5f) * 0.1f).coerceIn(3.5f, 5.0f)
                     tour.copy(rating = (newRating * 10).toInt() / 10.0f)
                 }
                 _availableTours.value = updatedTours
@@ -461,7 +610,7 @@ class MockDataManager @Inject constructor() {
         }
     }
 
-    // Mock data generation methods (keeping existing ones)
+    // Keep existing tour detail creation methods unchanged...
     private fun generateInitialTours(): List<TourPreview> {
         val currentTime = System.currentTimeMillis()
         return listOf(
@@ -469,7 +618,7 @@ class MockDataManager @Inject constructor() {
                 id = "1",
                 title = "Hidden Gems of Paris",
                 description = "Discover secret spots and local favorites in the City of Light. Walk through charming neighborhoods and hidden courtyards.",
-                coverImageUrl = null,
+                coverImageUrl = "https://images.unsplash.com/photo-1502602898536-47ad22581b52?auto=format&fit=crop&w=400&q=80",
                 rating = 4.8f,
                 price = 25.0,
                 isFree = false,
@@ -477,12 +626,11 @@ class MockDataManager @Inject constructor() {
                 startTime = currentTime + 3600000,
                 duration = 120,
                 distance = 3.2f
-            ),
-            TourPreview(
+            ), TourPreview(
                 id = "2",
                 title = "Street Art Walking Tour",
                 description = "Explore the vibrant street art scene and learn about the artists behind the masterpieces.",
-                coverImageUrl = null,
+                coverImageUrl = "https://images.unsplash.com/photo-1541961017774-22349e4a1262?auto=format&fit=crop&w=400&q=80",
                 rating = 4.6f,
                 price = 0.0,
                 isFree = true,
@@ -490,12 +638,11 @@ class MockDataManager @Inject constructor() {
                 startTime = currentTime + 1800000,
                 duration = 90,
                 distance = 2.1f
-            ),
-            TourPreview(
+            ), TourPreview(
                 id = "3",
                 title = "Historic Downtown Walk",
                 description = "Journey through centuries of history in the heart of the old city.",
-                coverImageUrl = null,
+                coverImageUrl = "https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?auto=format&fit=crop&w=400&q=80",
                 rating = 4.5f,
                 price = 18.0,
                 isFree = false,
@@ -503,12 +650,11 @@ class MockDataManager @Inject constructor() {
                 startTime = currentTime + 7200000,
                 duration = 75,
                 distance = 1.8f
-            ),
-            TourPreview(
+            ), TourPreview(
                 id = "4",
                 title = "Food & Culture Experience",
                 description = "Taste authentic local cuisine while learning about cultural traditions.",
-                coverImageUrl = null,
+                coverImageUrl = "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&w=400&q=80",
                 rating = 4.9f,
                 price = 35.0,
                 isFree = false,
@@ -516,12 +662,11 @@ class MockDataManager @Inject constructor() {
                 startTime = currentTime + 86400000,
                 duration = 150,
                 distance = 2.7f
-            ),
-            TourPreview(
+            ), TourPreview(
                 id = "5",
                 title = "Architecture Highlights",
                 description = "Marvel at stunning architectural styles from Gothic to Modern.",
-                coverImageUrl = null,
+                coverImageUrl = "https://images.unsplash.com/photo-1449824913935-59a10b8d2000?auto=format&fit=crop&w=400&q=80",
                 rating = 4.7f,
                 price = 22.0,
                 isFree = false,
@@ -539,16 +684,15 @@ class MockDataManager @Inject constructor() {
             MyTour(
                 id = "created_demo_1",
                 title = "My Secret Garden Tour",
-                coverImageUrl = null,
+                coverImageUrl = "https://images.unsplash.com/photo-1416879595882-3373a0480b5b?auto=format&fit=crop&w=400&q=80",
                 startTime = currentTime + 7200000,
                 status = TourStatus.UPCOMING,
                 participantsCount = 5,
                 rating = null
-            ),
-            MyTour(
+            ), MyTour(
                 id = "created_demo_2",
                 title = "Local Artisan Workshop",
-                coverImageUrl = null,
+                coverImageUrl = "https://images.unsplash.com/photo-1452860606245-08befc0ff44b?auto=format&fit=crop&w=400&q=80",
                 startTime = currentTime - 172800000,
                 status = TourStatus.COMPLETED,
                 participantsCount = 8,
@@ -557,12 +701,12 @@ class MockDataManager @Inject constructor() {
         )
     }
 
-    // Existing detail creation methods remain the same...
+    // Keep existing tour detail methods...
     private fun createTourDetail1() = TourDetail(
         id = "1",
         title = "Hidden Gems of Paris",
         description = "Discover the secret spots of Paris that most tourists never see. This walking tour takes you through charming neighborhoods, hidden courtyards, and local favorites. Learn about the history, culture, and stories that make these places special.",
-        coverImageUrl = null,
+        coverImageUrl = "https://images.unsplash.com/photo-1502602898536-47ad22581b52?auto=format&fit=crop&w=800&q=80",
         theme = "CULTURAL",
         rating = 4.8f,
         reviewsCount = 127,
@@ -577,7 +721,7 @@ class MockDataManager @Inject constructor() {
         guide = TourGuide(
             id = "guide1",
             name = "Marie Dubois",
-            avatarUrl = null,
+            avatarUrl = "https://images.unsplash.com/photo-1494790108755-2616b612b97c?auto=format&fit=crop&w=150&h=150&q=80",
             rating = 4.9f,
             toursCount = 45
         ),
@@ -589,16 +733,14 @@ class MockDataManager @Inject constructor() {
                 latitude = 48.8634,
                 longitude = 2.3375,
                 order = 1
-            ),
-            TourStopDetail(
+            ), TourStopDetail(
                 id = "1_2",
                 name = "Passage des Panoramas",
                 description = "Historic covered passage with vintage shops and authentic Parisian atmosphere",
                 latitude = 48.8714,
                 longitude = 2.3417,
                 order = 2
-            ),
-            TourStopDetail(
+            ), TourStopDetail(
                 id = "1_3",
                 name = "Square Suzanne Buisson",
                 description = "Romantic hidden square in Montmartre with stunning city views",
@@ -609,11 +751,12 @@ class MockDataManager @Inject constructor() {
         )
     )
 
+    // Continue with other tour detail methods... (keeping them as they were)
     private fun createTourDetail2() = TourDetail(
         id = "2",
         title = "Street Art Walking Tour",
         description = "Explore the vibrant street art scene and learn about the artists behind the masterpieces. Discover how urban art has transformed neighborhoods and become a voice for social change.",
-        coverImageUrl = null,
+        coverImageUrl = "https://images.unsplash.com/photo-1541961017774-22349e4a1262?auto=format&fit=crop&w=800&q=80",
         theme = "ART",
         rating = 4.6f,
         reviewsCount = 89,
@@ -628,7 +771,7 @@ class MockDataManager @Inject constructor() {
         guide = TourGuide(
             id = "guide2",
             name = "Carlos Rodriguez",
-            avatarUrl = null,
+            avatarUrl = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&h=150&q=80",
             rating = 4.7f,
             toursCount = 23
         ),
@@ -640,8 +783,7 @@ class MockDataManager @Inject constructor() {
                 latitude = 48.8566,
                 longitude = 2.3522,
                 order = 1
-            ),
-            TourStopDetail(
+            ), TourStopDetail(
                 id = "2_2",
                 name = "Urban Gallery Wall",
                 description = "Ever-changing gallery wall where new artists showcase their work",
@@ -656,7 +798,7 @@ class MockDataManager @Inject constructor() {
         id = "3",
         title = "Historic Downtown Walk",
         description = "Journey through centuries of history in the heart of the old city. Perfect for history enthusiasts and curious travelers alike.",
-        coverImageUrl = null,
+        coverImageUrl = "https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?auto=format&fit=crop&w=800&q=80",
         theme = "HISTORICAL",
         rating = 4.5f,
         reviewsCount = 156,
@@ -671,7 +813,7 @@ class MockDataManager @Inject constructor() {
         guide = TourGuide(
             id = "guide3",
             name = "Professor Williams",
-            avatarUrl = null,
+            avatarUrl = "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=150&h=150&q=80",
             rating = 4.8f,
             toursCount = 67
         ),
@@ -683,8 +825,7 @@ class MockDataManager @Inject constructor() {
                 latitude = 48.8566,
                 longitude = 2.3522,
                 order = 1
-            ),
-            TourStopDetail(
+            ), TourStopDetail(
                 id = "3_2",
                 name = "Old Cathedral",
                 description = "Medieval cathedral with stunning stained glass windows",
@@ -699,7 +840,7 @@ class MockDataManager @Inject constructor() {
         id = "4",
         title = "Food & Culture Experience",
         description = "Taste authentic local cuisine while learning about cultural traditions and cooking techniques. A feast for all your senses!",
-        coverImageUrl = null,
+        coverImageUrl = "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&w=800&q=80",
         theme = "FOOD",
         rating = 4.9f,
         reviewsCount = 203,
@@ -714,7 +855,7 @@ class MockDataManager @Inject constructor() {
         guide = TourGuide(
             id = "guide4",
             name = "Chef Isabella",
-            avatarUrl = null,
+            avatarUrl = "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&w=150&h=150&q=80",
             rating = 4.9f,
             toursCount = 89
         ),
@@ -726,16 +867,14 @@ class MockDataManager @Inject constructor() {
                 latitude = 48.8566,
                 longitude = 2.3522,
                 order = 1
-            ),
-            TourStopDetail(
+            ), TourStopDetail(
                 id = "4_2",
                 name = "Historic Bakery",
                 description = "Family bakery operating since 1890 with original recipes",
                 latitude = 48.8576,
                 longitude = 2.3532,
                 order = 2
-            ),
-            TourStopDetail(
+            ), TourStopDetail(
                 id = "4_3",
                 name = "Wine Cellar",
                 description = "Underground wine cellar with tastings and expert guidance",
@@ -750,7 +889,7 @@ class MockDataManager @Inject constructor() {
         id = "5",
         title = "Architecture Highlights",
         description = "Marvel at stunning architectural styles from Gothic to Modern, guided by a local expert with deep knowledge of building history and design.",
-        coverImageUrl = null,
+        coverImageUrl = "https://images.unsplash.com/photo-1449824913935-59a10b8d2000?auto=format&fit=crop&w=800&q=80",
         theme = "ARCHITECTURE",
         rating = 4.7f,
         reviewsCount = 134,
@@ -765,7 +904,7 @@ class MockDataManager @Inject constructor() {
         guide = TourGuide(
             id = "guide5",
             name = "Architect Sarah Chen",
-            avatarUrl = null,
+            avatarUrl = "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=150&h=150&q=80",
             rating = 4.8f,
             toursCount = 52
         ),
@@ -777,16 +916,14 @@ class MockDataManager @Inject constructor() {
                 latitude = 48.8566,
                 longitude = 2.3522,
                 order = 1
-            ),
-            TourStopDetail(
+            ), TourStopDetail(
                 id = "5_2",
                 name = "Art Deco Building",
                 description = "Beautiful 1920s Art Deco facade with geometric patterns",
                 latitude = 48.8576,
                 longitude = 2.3532,
                 order = 2
-            ),
-            TourStopDetail(
+            ), TourStopDetail(
                 id = "5_3",
                 name = "Modern Glass Tower",
                 description = "Contemporary architecture showcasing sustainable design",
@@ -801,7 +938,7 @@ class MockDataManager @Inject constructor() {
         id = id,
         title = "Amazing City Tour",
         description = "Discover the beauty and history of our wonderful city through this carefully crafted walking experience.",
-        coverImageUrl = null,
+        coverImageUrl = "https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?auto=format&fit=crop&w=800&q=80",
         theme = "GENERAL",
         rating = 4.5f,
         reviewsCount = 42,
@@ -816,7 +953,7 @@ class MockDataManager @Inject constructor() {
         guide = TourGuide(
             id = "guide_default",
             name = "Local Guide",
-            avatarUrl = null,
+            avatarUrl = "https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&w=150&h=150&q=80",
             rating = 4.6f,
             toursCount = 15
         ),
@@ -828,8 +965,7 @@ class MockDataManager @Inject constructor() {
                 latitude = 48.8566,
                 longitude = 2.3522,
                 order = 1
-            ),
-            TourStopDetail(
+            ), TourStopDetail(
                 id = "${id}_2",
                 name = "Main Square",
                 description = "The heart of the city with beautiful architecture",
@@ -839,4 +975,58 @@ class MockDataManager @Inject constructor() {
             )
         )
     )
+
+    suspend fun updateTour(
+        tourId: String,
+        title: String,
+        description: String,
+        stops: List<Any>,
+        startDateTime: Long?,
+        price: Double
+    ): Boolean {
+        delay(800)
+
+        try {
+            val currentTours = _availableTours.value.toMutableList()
+            val tourIndex = currentTours.indexOfFirst { it.id == tourId }
+            if (tourIndex != -1) {
+                val updatedTour = currentTours[tourIndex].copy(
+                    title = title,
+                    description = description,
+                    price = price,
+                    isFree = price == 0.0,
+                    startTime = startDateTime ?: currentTours[tourIndex].startTime,
+                    duration = stops.size * 15,
+                    distance = stops.size * 0.3f
+                )
+                currentTours[tourIndex] = updatedTour
+                _availableTours.value = currentTours
+            }
+
+            // Update in created tours
+            val currentCreatedTours = _createdTours.value.toMutableList()
+            val createdTourIndex = currentCreatedTours.indexOfFirst { it.id == tourId }
+            if (createdTourIndex != -1) {
+                val updatedCreatedTour = currentCreatedTours[createdTourIndex].copy(
+                    title = title,
+                    startTime = startDateTime ?: currentCreatedTours[createdTourIndex].startTime
+                )
+                currentCreatedTours[createdTourIndex] = updatedCreatedTour
+                _createdTours.value = currentCreatedTours
+            }
+
+            return true
+        } catch (e: Exception) {
+            return false
+        }
+    }
 }
+
+// Data classes for enhanced profile support
+data class UserPreferences(
+    val notificationsEnabled: Boolean = true,
+    val locationSharingEnabled: Boolean = true,
+    val language: String = "en",
+    val currency: String = "USD",
+    val darkMode: Boolean = false
+)

@@ -1,6 +1,7 @@
 package com.xwurfel.tourry.ui.profile
 
 import com.xwurfel.tourry.core.ui.MviViewModel
+import com.xwurfel.tourry.feature.analytics.TourAnalytics
 import com.xwurfel.tourry.feature.mock.MockDataManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
@@ -10,7 +11,8 @@ import javax.inject.Inject
 
 @HiltViewModel
 class ProfileViewModel @Inject constructor(
-    private val mockDataManager: MockDataManager
+    private val mockDataManager: MockDataManager,
+    private val tourAnalytics: TourAnalytics
 ) : MviViewModel<ProfileUiState, ProfilePartialState, ProfileEvent, ProfileIntent>(
     initialState = ProfileUiState()
 ) {
@@ -26,6 +28,10 @@ class ProfileViewModel @Inject constructor(
     override fun mapIntents(intent: ProfileIntent): Flow<ProfilePartialState> = flow {
         when (intent) {
             ProfileIntent.SignIn -> {
+                tourAnalytics.trackEvent(
+                    "profile_sign_in_requested",
+                    mapOf("source" to "profile_screen")
+                )
                 publishEvent(ProfileEvent.NavigateToAuth)
             }
 
@@ -33,10 +39,17 @@ class ProfileViewModel @Inject constructor(
                 emit(ProfilePartialState.Loading)
                 try {
                     kotlinx.coroutines.delay(500)
+
+                    val currentUserId = mockDataManager.currentUserId.value
+                    tourAnalytics.trackEvent(
+                        "user_signed_out",
+                        mapOf("user_id" to (currentUserId ?: "unknown"))
+                    )
+
                     mockDataManager.signOut()
                     emit(ProfilePartialState.SignedOut)
                     publishEvent(ProfileEvent.NavigateToAuth)
-                } catch (e: Exception) {
+                } catch (_: Exception) {
                     emit(ProfilePartialState.Error("Sign out failed"))
                 }
             }
@@ -63,6 +76,14 @@ class ProfileViewModel @Inject constructor(
                             val changedFields =
                                 getChangedFields(uiStateSnapshot.value.user, intent.profile)
                             mockDataManager.trackProfileEdit(currentUserId, changedFields)
+
+                            tourAnalytics.trackEvent(
+                                "profile_updated",
+                                mapOf(
+                                    "user_id" to currentUserId,
+                                    "fields_changed" to changedFields.joinToString(",")
+                                )
+                            )
                         } else {
                             emit(ProfilePartialState.Error("Failed to update profile"))
                         }
@@ -83,6 +104,11 @@ class ProfileViewModel @Inject constructor(
                             mockDataManager.uploadProfileAvatar(currentUserId, intent.imageUri)
                         if (avatarUrl != null) {
                             emit(ProfilePartialState.AvatarUploaded(avatarUrl))
+
+                            tourAnalytics.trackEvent(
+                                "avatar_uploaded",
+                                mapOf("user_id" to currentUserId)
+                            )
                         } else {
                             emit(ProfilePartialState.Error("Failed to upload avatar"))
                         }
@@ -99,10 +125,15 @@ class ProfileViewModel @Inject constructor(
                     val success = mockDataManager.updateNotificationSettings(intent.enabled)
                     if (success) {
                         emit(ProfilePartialState.NotificationSettingsUpdated(intent.enabled))
+
+                        tourAnalytics.trackEvent(
+                            "notification_settings_changed",
+                            mapOf("enabled" to intent.enabled.toString())
+                        )
                     } else {
                         emit(ProfilePartialState.Error("Failed to update notification settings"))
                     }
-                } catch (e: Exception) {
+                } catch (_: Exception) {
                     emit(ProfilePartialState.Error("Failed to update notification settings"))
                 }
             }
@@ -112,10 +143,15 @@ class ProfileViewModel @Inject constructor(
                     val success = mockDataManager.updateLocationSharingSettings(intent.enabled)
                     if (success) {
                         emit(ProfilePartialState.LocationSharingUpdated(intent.enabled))
+
+                        tourAnalytics.trackEvent(
+                            "location_sharing_changed",
+                            mapOf("enabled" to intent.enabled.toString())
+                        )
                     } else {
                         emit(ProfilePartialState.Error("Failed to update location settings"))
                     }
-                } catch (e: Exception) {
+                } catch (_: Exception) {
                     emit(ProfilePartialState.Error("Failed to update location settings"))
                 }
             }
@@ -125,6 +161,11 @@ class ProfileViewModel @Inject constructor(
                 try {
                     val currentUserId = mockDataManager.currentUserId.value
                     if (currentUserId != null) {
+                        tourAnalytics.trackEvent(
+                            "account_deletion_requested",
+                            mapOf("user_id" to currentUserId)
+                        )
+
                         val success = mockDataManager.deleteAccount(currentUserId)
                         if (success) {
                             emit(ProfilePartialState.AccountDeleted)
@@ -141,16 +182,28 @@ class ProfileViewModel @Inject constructor(
             }
 
             ProfileIntent.ViewAnalytics -> {
+                tourAnalytics.trackEvent(
+                    "analytics_viewed",
+                    mapOf("source" to "profile_screen")
+                )
                 publishEvent(ProfileEvent.NavigateToAnalytics)
             }
 
             ProfileIntent.ViewHelp -> {
+                tourAnalytics.trackEvent(
+                    "help_accessed",
+                    mapOf("source" to "profile_screen")
+                )
                 publishEvent(ProfileEvent.NavigateToHelp)
             }
 
             ProfileIntent.ShareProfile -> {
                 val currentUser = uiStateSnapshot.value.user
                 if (currentUser != null) {
+                    tourAnalytics.trackEvent(
+                        "profile_shared",
+                        mapOf("user_id" to currentUser.id)
+                    )
                     publishEvent(ProfileEvent.ShareProfile(currentUser))
                 }
             }
@@ -158,6 +211,22 @@ class ProfileViewModel @Inject constructor(
             ProfileIntent.RefreshProfile -> {
                 emit(ProfilePartialState.Loading)
                 loadUserProfileFromSource()
+            }
+
+            ProfileIntent.CreateTour -> {
+                tourAnalytics.trackEvent(
+                    "tour_creation_started",
+                    mapOf("source" to "profile_fab")
+                )
+                publishEvent(ProfileEvent.NavigateToTourCreation)
+            }
+
+            ProfileIntent.ViewMyTours -> {
+                tourAnalytics.trackEvent(
+                    "my_tours_accessed",
+                    mapOf("source" to "profile_stats")
+                )
+                publishEvent(ProfileEvent.NavigateToMyTours)
             }
         }
     }
@@ -169,7 +238,8 @@ class ProfileViewModel @Inject constructor(
         return when (partialState) {
             ProfilePartialState.Loading -> previousState.copy(
                 isLoading = true,
-                error = null
+                error = null,
+                isProfileUpdated = false
             )
 
             is ProfilePartialState.ProfileLoaded -> previousState.copy(
@@ -183,12 +253,14 @@ class ProfileViewModel @Inject constructor(
 
             ProfilePartialState.UpdatingProfile -> previousState.copy(
                 isUpdatingProfile = true,
-                error = null
+                error = null,
+                isProfileUpdated = false
             )
 
             ProfilePartialState.ProfileUpdated -> previousState.copy(
                 isUpdatingProfile = false,
-                error = null
+                error = null,
+                isProfileUpdated = true
             )
 
             ProfilePartialState.UploadingAvatar -> previousState.copy(
@@ -201,7 +273,8 @@ class ProfileViewModel @Inject constructor(
                 previousState.copy(
                     user = updatedUser,
                     isUploadingAvatar = false,
-                    error = null
+                    error = null,
+                    isProfileUpdated = true
                 )
             }
 
@@ -232,7 +305,8 @@ class ProfileViewModel @Inject constructor(
                 isUpdatingProfile = false,
                 isUploadingAvatar = false,
                 isDeletingAccount = false,
-                error = partialState.message
+                error = partialState.message,
+                isProfileUpdated = false
             )
         }
     }
@@ -278,7 +352,7 @@ class ProfileViewModel @Inject constructor(
                 val stats = mockDataManager.loadUserStats(currentUserId)
                 // This will trigger through the observeUserProfile flow
             }
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             // Error handling is done in the flow
         }
     }
@@ -297,7 +371,7 @@ class ProfileViewModel @Inject constructor(
     }
 }
 
-// Enhanced States
+// Enhanced States with additional properties
 data class ProfileUiState(
     val user: UserProfile? = null,
     val userStats: UserStats? = null,
@@ -307,6 +381,7 @@ data class ProfileUiState(
     val isDeletingAccount: Boolean = false,
     val notificationsEnabled: Boolean = true,
     val locationSharingEnabled: Boolean = true,
+    val isProfileUpdated: Boolean = false, // For showing success messages
     val error: String? = null
 )
 
@@ -357,6 +432,10 @@ sealed interface ProfileIntent {
     object ViewAnalytics : ProfileIntent
     object ViewHelp : ProfileIntent
     object ShareProfile : ProfileIntent
+
+    // New intents for tour integration
+    object CreateTour : ProfileIntent
+    object ViewMyTours : ProfileIntent
 }
 
 sealed interface ProfileEvent {
@@ -365,9 +444,13 @@ sealed interface ProfileEvent {
     object NavigateToAnalytics : ProfileEvent
     object NavigateToHelp : ProfileEvent
     data class ShareProfile(val user: UserProfile) : ProfileEvent
+
+    // New events for tour integration
+    object NavigateToTourCreation : ProfileEvent
+    object NavigateToMyTours : ProfileEvent
 }
 
-// Enhanced Data models
+// Enhanced Data models with stats integration
 data class UserProfile(
     val id: String,
     val name: String,
@@ -375,11 +458,14 @@ data class UserProfile(
     val avatarUrl: String?,
     val bio: String = "",
     val rating: Float = 0f,
-    val reviewsCount: Int = 0
+    val reviewsCount: Int = 0,
+    val stats: UserStats? = null // Optional embedded stats for convenience
 )
 
 data class UserStats(
     val toursCreated: Int,
     val toursJoined: Int,
-    val totalParticipants: Int
+    val totalParticipants: Int,
+    val totalRatings: Float = 0f,
+    val averageRating: Float = 0f
 )

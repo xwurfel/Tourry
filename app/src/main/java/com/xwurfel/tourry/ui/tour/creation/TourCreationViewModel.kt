@@ -169,6 +169,43 @@ class TourCreationViewModel @Inject constructor(
                 // TODO: Implement draft saving
                 emit(TourCreationPartialState.DraftSaved)
             }
+
+            is TourCreationIntent.UpdateTour -> {
+                val state = uiStateSnapshot.value
+
+                if (!validateAllSteps(state)) {
+                    emit(TourCreationPartialState.ValidationError("Please complete all required information"))
+                    return@flow
+                }
+
+                emit(TourCreationPartialState.Publishing)
+
+                try {
+                    kotlinx.coroutines.delay(1000)
+
+                    // Update existing tour instead of creating new one
+                    val success = mockDataManager.updateTour(
+                        tourId = tourId!!, // We know it's not null in edit mode
+                        title = state.title,
+                        description = state.description,
+                        stops = state.stops,
+                        startDateTime = state.startDateTime,
+                        price = state.price
+                    )
+
+                    if (success) {
+                        tourAnalytics.trackEvent(
+                            "tour_updated",
+                            mapOf("tour_id" to tourId)
+                        )
+                        emit(TourCreationPartialState.TourUpdated(tourId))
+                    } else {
+                        emit(TourCreationPartialState.Error("Failed to update tour"))
+                    }
+                } catch (e: Exception) {
+                    emit(TourCreationPartialState.Error("Failed to update tour: ${e.message}"))
+                }
+            }
         }
     }
 
@@ -261,6 +298,14 @@ class TourCreationViewModel @Inject constructor(
                 recurrenceRule = partialState.recurrenceRule,
                 isEditing = true
             )
+
+            is TourCreationPartialState.TourUpdated -> {
+                publishEvent(TourCreationEvent.NavigateToTourDetail(partialState.tourId))
+                previousState.copy(
+                    isPublishing = false,
+                    validationError = null
+                )
+            }
         }
     }
 
@@ -363,6 +408,8 @@ sealed interface TourCreationPartialState {
         val price: Double,
         val recurrenceRule: String?
     ) : TourCreationPartialState
+
+    data class TourUpdated(val tourId: String) : TourCreationPartialState
 }
 
 sealed interface TourCreationIntent {
@@ -388,6 +435,8 @@ sealed interface TourCreationIntent {
     object PreviousStep : TourCreationIntent
     object PublishTour : TourCreationIntent
     object SaveDraft : TourCreationIntent
+    object UpdateTour : TourCreationIntent
+
 }
 
 sealed interface TourCreationEvent {

@@ -65,6 +65,15 @@ fun TourryNavHost(
                         // Don't clear the profile screen from backstack
                         // so user can return to it after auth
                     }
+                },
+                onNavigateToTourCreation = {
+                    navController.navigate(tourCreationRoute)
+                },
+                onNavigateToMyTours = {
+                    navController.navigate(myToursRoute) {
+                        // Navigate to MyTours tab but don't clear profile from backstack
+                        launchSingleTop = true
+                    }
                 }
             )
         }
@@ -120,7 +129,6 @@ fun TourryNavHost(
                     navController.popBackStack()
                 },
                 onTourCreated = { tourId ->
-                    // Navigate to the newly created tour detail and clear creation from backstack
                     navController.navigate(TourryNavigation.createTourDetailRoute(tourId)) {
                         popUpTo(tourCreationRouteWithArgs) { inclusive = true }
                     }
@@ -178,6 +186,20 @@ fun TourryNavHost(
                     }
                 }
             )
+        }
+
+        // Analytics Screen (placeholder for future implementation)
+        composable("analytics") {
+            // TODO: Implement analytics screen
+            // For now, just navigate back
+            navController.popBackStack()
+        }
+
+        // Help Screen (placeholder for future implementation)
+        composable("help") {
+            // TODO: Implement help screen
+            // For now, just navigate back
+            navController.popBackStack()
         }
     }
 }

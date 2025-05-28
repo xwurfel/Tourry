@@ -48,4 +48,6 @@
     <string name="free">Free</string>
     <string name="live_soon">LIVE soon</string>
     <string name="clear">clear</string>
+    <string name="edit_tour_title">Edit tour</string>
+    <string name="update_tour">Update tour</string>
 </resources>

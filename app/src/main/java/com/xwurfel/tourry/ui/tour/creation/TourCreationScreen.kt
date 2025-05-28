@@ -51,6 +51,8 @@ fun TourCreationRoute(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
+    val isEditing = uiState.isEditing
+
     viewModel.event.collectWithLifecycle { event ->
         when (event) {
             is TourCreationEvent.NavigateToTourDetail -> onTourCreated(event.tourId)
@@ -60,16 +62,19 @@ fun TourCreationRoute(
     TourCreationScreen(
         uiState = uiState,
         onIntent = viewModel::acceptIntent,
-        onNavigateBack = onNavigateBack
+        onNavigateBack = onNavigateBack,
+        isEditing = isEditing
     )
 }
+
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun TourCreationScreen(
     uiState: TourCreationUiState,
     onIntent: (TourCreationIntent) -> Unit,
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    isEditing: Boolean = false
 ) {
     val pagerState = rememberPagerState(
         initialPage = uiState.currentStep,
@@ -83,7 +88,14 @@ fun TourCreationScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.tour_creation_title)) },
+                title = {
+                    Text(
+                        stringResource(
+                            if (isEditing) R.string.edit_tour_title
+                            else R.string.tour_creation_title
+                        )
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -96,8 +108,15 @@ fun TourCreationScreen(
                 currentStep = uiState.currentStep,
                 onPreviousClick = { onIntent(TourCreationIntent.PreviousStep) },
                 onNextClick = { onIntent(TourCreationIntent.NextStep) },
-                onPublishClick = { onIntent(TourCreationIntent.PublishTour) },
-                isPublishing = uiState.isPublishing
+                onPublishClick = {
+                    if (isEditing) {
+                        onIntent(TourCreationIntent.UpdateTour)
+                    } else {
+                        onIntent(TourCreationIntent.PublishTour)
+                    }
+                },
+                isPublishing = uiState.isPublishing,
+                isEditing = isEditing
             )
         }
     ) { paddingValues ->
@@ -234,11 +253,10 @@ fun TourCreationBottomBar(
     onPreviousClick: () -> Unit,
     onNextClick: () -> Unit,
     onPublishClick: () -> Unit,
-    isPublishing: Boolean
+    isPublishing: Boolean,
+    isEditing: Boolean = false
 ) {
-    Surface(
-        tonalElevation = 3.dp
-    ) {
+    Surface(tonalElevation = 3.dp) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -273,7 +291,12 @@ fun TourCreationBottomBar(
                             strokeWidth = 2.dp
                         )
                     } else {
-                        Text(stringResource(R.string.publish))
+                        Text(
+                            stringResource(
+                                if (isEditing) R.string.update_tour
+                                else R.string.publish
+                            )
+                        )
                     }
                 }
             }
