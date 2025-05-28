@@ -70,6 +70,7 @@ import com.google.maps.android.compose.Polyline
 import com.google.maps.android.compose.rememberCameraPositionState
 import com.xwurfel.tourry.core.extension.collectWithLifecycle
 import com.xwurfel.tourry.feature.audio.PlaybackState
+import com.xwurfel.tourry.feature.tours.domain.model.StopContent
 import com.xwurfel.tourry.util.permissions.LocationPermissionsHandler
 
 @Composable
@@ -388,9 +389,10 @@ fun StopContentCard(
             }
 
             // Content (unchanged)
-            if (content.imageUrl != null) {
+            if (content.imageUrls.isNotEmpty()) {
+                // TODO: Add support for multiple images
                 AsyncImage(
-                    model = content.imageUrl,
+                    model = content.imageUrls.first(),
                     contentDescription = null,
                     modifier = Modifier
                         .fillMaxWidth()

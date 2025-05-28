@@ -41,16 +41,17 @@ class ProfileViewModel @Inject constructor(
     override fun mapIntents(intent: ProfileIntent): Flow<ProfilePartialState> = flow {
         when (intent) {
             ProfileIntent.SignIn -> {
-                emit(ProfilePartialState.Loading(true))
-                try {
-                    val userId = "demo_user_${System.currentTimeMillis()}"
-                    mockDataManager.signIn(userId)
-
-                    emit(ProfilePartialState.Loading(false))
-                } catch (e: Exception) {
-                    emit(ProfilePartialState.Loading(false))
-                    emit(ProfilePartialState.Error("Failed to sign in: ${e.message}"))
-                }
+                publishEvent(ProfileEvent.NavigateToSignIn)
+//                emit(ProfilePartialState.Loading(true))
+//                try {
+//                    val userId = "demo_user_${System.currentTimeMillis()}"
+//                    mockDataManager.signIn(userId)
+//
+//                    emit(ProfilePartialState.Loading(false))
+//                } catch (e: Exception) {
+//                    emit(ProfilePartialState.Loading(false))
+//                    emit(ProfilePartialState.Error("Failed to sign in: ${e.message}"))
+//                }
             }
 
             ProfileIntent.SignOut -> {
@@ -177,6 +178,7 @@ sealed interface ProfileIntent {
 }
 
 sealed interface ProfileEvent {
-    object NavigateToCreateTour : ProfileEvent
-    object NavigateToMyTours : ProfileEvent
+    data object NavigateToCreateTour : ProfileEvent
+    data object NavigateToMyTours : ProfileEvent
+    data object NavigateToSignIn : ProfileEvent
 }

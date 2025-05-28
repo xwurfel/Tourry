@@ -9,9 +9,13 @@ import com.google.firebase.auth.FirebaseAuthUserCollisionException
 import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.auth.userProfileChangeRequest
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.toObject
 import com.xwurfel.tourry.R
 import com.xwurfel.tourry.core.domain.util.DomainResult
 import com.xwurfel.tourry.core.domain.util.result
+import com.xwurfel.tourry.feature.profile.data.model.FirestoreUser
+import com.xwurfel.tourry.feature.profile.data.model.FirestoreUserSettings
+import com.xwurfel.tourry.feature.profile.data.model.FirestoreUserStats
 import com.xwurfel.tourry.feature.profile.domain.model.User
 import com.xwurfel.tourry.feature.profile.domain.model.UserSettings
 import com.xwurfel.tourry.feature.profile.domain.model.UserStats
@@ -19,8 +23,6 @@ import com.xwurfel.tourry.feature.profile.domain.repository.UserRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.tasks.await
@@ -37,45 +39,128 @@ class FirebaseUserRepositoryImpl @Inject constructor(
     private val googleSignInClient: GoogleSignInClient
 ) : UserRepository {
 
-    private val _userSettings = MutableStateFlow(UserSettings())
-    private val _userStats = MutableStateFlow<UserStats?>(null)
+    companion object {
+        private const val USERS_COLLECTION = "users"
+        private const val USER_STATS_COLLECTION = "user_stats"
+        private const val USER_SETTINGS_COLLECTION = "user_settings"
+    }
 
     override fun observeCurrentUser(): Flow<User?> = callbackFlow {
         val authStateListener = FirebaseAuth.AuthStateListener { auth ->
             val firebaseUser = auth.currentUser
-            val user = firebaseUser?.let { fbUser ->
-                User(
-                    id = fbUser.uid,
-                    name = fbUser.displayName ?: "User",
-                    email = fbUser.email ?: "",
-                    avatarUrl = fbUser.photoUrl?.toString(),
-                    stats = _userStats.value
-                )
+
+            if (firebaseUser != null) {
+                // Load user profile from Firestore
+                firestore.collection(USERS_COLLECTION)
+                    .document(firebaseUser.uid)
+                    .addSnapshotListener { snapshot, error ->
+                        if (error != null) {
+                            Timber.e(error, "Error observing user profile")
+                            trySend(null)
+                            return@addSnapshotListener
+                        }
+
+                        val firestoreUser = snapshot?.toObject<FirestoreUser>()
+                        val user = if (firestoreUser != null) {
+                            User(
+                                id = firestoreUser.id,
+                                name = firestoreUser.name,
+                                email = firestoreUser.email,
+                                avatarUrl = firestoreUser.avatarUrl
+                            )
+                        } else {
+                            // Create basic user from Firebase Auth if not in Firestore
+                            User(
+                                id = firebaseUser.uid,
+                                name = firebaseUser.displayName ?: "User",
+                                email = firebaseUser.email ?: "",
+                                avatarUrl = firebaseUser.photoUrl?.toString()
+                            )
+                        }
+
+                        trySend(user)
+                    }
+            } else {
+                trySend(null)
             }
-            trySend(user)
         }
 
         firebaseAuth.addAuthStateListener(authStateListener)
-
-        firebaseAuth.currentUser?.let { user ->
-            loadUserStats(user.uid)
-        }
-
-        awaitClose {
-            firebaseAuth.removeAuthStateListener(authStateListener)
-        }
+        awaitClose { firebaseAuth.removeAuthStateListener(authStateListener) }
     }
 
     override fun observeAuthenticationState(): Flow<Boolean> =
         observeCurrentUser().map { it != null }
 
-    override fun observeUserStats(): Flow<UserStats?> = _userStats.asStateFlow()
+    override fun observeUserStats(): Flow<UserStats?> = callbackFlow {
+        val authStateListener = FirebaseAuth.AuthStateListener { auth ->
+            val firebaseUser = auth.currentUser
 
-    override fun observeUserSettings(): Flow<UserSettings> = _userSettings.asStateFlow()
+            if (firebaseUser != null) {
+                firestore.collection(USER_STATS_COLLECTION)
+                    .document(firebaseUser.uid)
+                    .addSnapshotListener { snapshot, error ->
+                        if (error != null) {
+                            Timber.e(error, "Error observing user stats")
+                            trySend(null)
+                            return@addSnapshotListener
+                        }
+
+                        val firestoreStats = snapshot?.toObject<FirestoreUserStats>()
+                        val stats = firestoreStats?.let {
+                            UserStats(
+                                toursCreated = it.toursCreated,
+                                toursJoined = it.toursJoined
+                            )
+                        }
+
+                        trySend(stats)
+                    }
+            } else {
+                trySend(null)
+            }
+        }
+
+        firebaseAuth.addAuthStateListener(authStateListener)
+        awaitClose { firebaseAuth.removeAuthStateListener(authStateListener) }
+    }
+
+    override fun observeUserSettings(): Flow<UserSettings> = callbackFlow {
+        val authStateListener = FirebaseAuth.AuthStateListener { auth ->
+            val firebaseUser = auth.currentUser
+
+            if (firebaseUser != null) {
+                firestore.collection(USER_SETTINGS_COLLECTION)
+                    .document(firebaseUser.uid)
+                    .addSnapshotListener { snapshot, error ->
+                        if (error != null) {
+                            Timber.e(error, "Error observing user settings")
+                            trySend(UserSettings()) // Default settings
+                            return@addSnapshotListener
+                        }
+
+                        val firestoreSettings = snapshot?.toObject<FirestoreUserSettings>()
+                        val settings = if (firestoreSettings != null) {
+                            UserSettings(
+                                notificationsEnabled = firestoreSettings.notificationsEnabled,
+                                locationPermissionGranted = firestoreSettings.locationPermissionGranted
+                            )
+                        } else {
+                            UserSettings() // Default settings
+                        }
+
+                        trySend(settings)
+                    }
+            } else {
+                trySend(UserSettings()) // Default settings for guests
+            }
+        }
+
+        firebaseAuth.addAuthStateListener(authStateListener)
+        awaitClose { firebaseAuth.removeAuthStateListener(authStateListener) }
+    }
 
     override suspend fun signInWithGoogle(): DomainResult<User> = result {
-        // This method is not directly used since we handle Google Sign-In through the activity result
-        // But we can provide the sign-in intent here if needed
         throw UnsupportedOperationException(
             "Use signInWithGoogleCredential after getting the ID token from Google Sign-In activity result"
         )
@@ -89,16 +174,20 @@ class FirebaseUserRepositoryImpl @Inject constructor(
             val firebaseUser = authResult.user
                 ?: throw Exception(context.getString(R.string.auth_sign_in_failed))
 
-            // Load or create user stats
-            loadUserStats(firebaseUser.uid)
-
-            User(
-                id = firebaseUser.uid,
+            // Create or update user in Firestore
+            val user = createOrUpdateUserProfile(
+                uid = firebaseUser.uid,
                 name = firebaseUser.displayName ?: "User",
                 email = firebaseUser.email ?: "",
-                avatarUrl = firebaseUser.photoUrl?.toString(),
-                stats = _userStats.value
+                avatarUrl = firebaseUser.photoUrl?.toString()
             )
+
+            // Initialize user stats and settings if new user
+            if (authResult.additionalUserInfo?.isNewUser == true) {
+                initializeUserData(firebaseUser.uid)
+            }
+
+            user
         } catch (e: Exception) {
             Timber.e(e, "Google credential sign-in failed")
             throw mapAuthException(e)
@@ -114,16 +203,8 @@ class FirebaseUserRepositoryImpl @Inject constructor(
             val firebaseUser = authResult.user
                 ?: throw Exception(context.getString(R.string.auth_sign_in_failed))
 
-            // Load user stats
-            loadUserStats(firebaseUser.uid)
-
-            User(
-                id = firebaseUser.uid,
-                name = firebaseUser.displayName ?: "User",
-                email = firebaseUser.email ?: "",
-                avatarUrl = firebaseUser.photoUrl?.toString(),
-                stats = _userStats.value
-            )
+            // Get user from Firestore or create basic profile
+            getOrCreateUserProfile(firebaseUser.uid, firebaseUser.displayName, email, null)
         } catch (e: Exception) {
             Timber.e(e, "Email sign-in failed")
             throw mapAuthException(e)
@@ -146,20 +227,18 @@ class FirebaseUserRepositoryImpl @Inject constructor(
             }
             firebaseUser.updateProfile(profileUpdates).await()
 
-            // Initialize user stats
-            val initialStats = UserStats(toursCreated = 0, toursJoined = 0)
-            _userStats.value = initialStats
-
-            // TODO: Save initial stats to Firestore
-            saveUserStats(firebaseUser.uid, initialStats)
-
-            User(
-                id = firebaseUser.uid,
+            // Create user profile in Firestore
+            val user = createOrUpdateUserProfile(
+                uid = firebaseUser.uid,
                 name = name,
                 email = email,
-                avatarUrl = null,
-                stats = initialStats
+                avatarUrl = null
             )
+
+            // Initialize user stats and settings
+            initializeUserData(firebaseUser.uid)
+
+            user
         } catch (e: Exception) {
             Timber.e(e, "Email account creation failed")
             throw mapAuthException(e)
@@ -177,16 +256,8 @@ class FirebaseUserRepositoryImpl @Inject constructor(
 
     override suspend fun signOut(): DomainResult<Unit> = result {
         try {
-            // Sign out from Firebase
             firebaseAuth.signOut()
-
-            // Sign out from Google
             googleSignInClient.signOut().await()
-
-            // Clear local data
-            _userSettings.value = UserSettings()
-            _userStats.value = null
-
         } catch (e: Exception) {
             Timber.e(e, "Sign out failed")
             throw Exception(context.getString(R.string.auth_sign_in_failed))
@@ -194,36 +265,98 @@ class FirebaseUserRepositoryImpl @Inject constructor(
     }
 
     override suspend fun updateUserSettings(settings: UserSettings): DomainResult<Unit> = result {
-        try {
-            _userSettings.value = settings
+        val currentUser = firebaseAuth.currentUser ?: throw Exception("User not authenticated")
 
-            // TODO: Save to Firestore
-            firebaseAuth.currentUser?.let { user ->
-                saveUserSettings(user.uid, settings)
-            }
-        } catch (e: Exception) {
-            Timber.e(e, "Failed to update user settings")
-            throw Exception("Failed to update settings")
-        }
+        val firestoreSettings = FirestoreUserSettings(
+            notificationsEnabled = settings.notificationsEnabled,
+            locationPermissionGranted = settings.locationPermissionGranted
+        )
+
+        firestore.collection(USER_SETTINGS_COLLECTION)
+            .document(currentUser.uid)
+            .set(firestoreSettings)
+            .await()
     }
 
-    private fun loadUserStats(userId: String) {
-        // TODO: Load from Firestore
-        // For now, use mock data
-        _userStats.value = UserStats(
-            toursCreated = 0,
-            toursJoined = 0
+    private suspend fun createOrUpdateUserProfile(
+        uid: String,
+        name: String,
+        email: String,
+        avatarUrl: String?
+    ): User {
+        val firestoreUser = FirestoreUser(
+            id = uid,
+            name = name,
+            email = email,
+            avatarUrl = avatarUrl,
+            createdAt = com.google.firebase.Timestamp.now(),
+            updatedAt = com.google.firebase.Timestamp.now()
+        )
+
+        firestore.collection(USERS_COLLECTION)
+            .document(uid)
+            .set(firestoreUser)
+            .await()
+
+        return User(
+            id = uid,
+            name = name,
+            email = email,
+            avatarUrl = avatarUrl
         )
     }
 
-    private suspend fun saveUserStats(userId: String, stats: UserStats) {
-        // TODO: Implement Firestore saving
-        Timber.d("Saving user stats for $userId: $stats")
+    private suspend fun getOrCreateUserProfile(
+        uid: String,
+        displayName: String?,
+        email: String,
+        photoUrl: String?
+    ): User {
+        val userDoc = firestore.collection(USERS_COLLECTION).document(uid).get().await()
+
+        return if (userDoc.exists()) {
+            val firestoreUser = userDoc.toObject<FirestoreUser>()!!
+            User(
+                id = firestoreUser.id,
+                name = firestoreUser.name,
+                email = firestoreUser.email,
+                avatarUrl = firestoreUser.avatarUrl
+            )
+        } else {
+            createOrUpdateUserProfile(uid, displayName ?: "User", email, photoUrl)
+        }
     }
 
-    private suspend fun saveUserSettings(userId: String, settings: UserSettings) {
-        // TODO: Implement Firestore saving
-        Timber.d("Saving user settings for $userId: $settings")
+    private suspend fun initializeUserData(uid: String) {
+        // Initialize user stats
+        val initialStats = FirestoreUserStats(
+            toursCreated = 0,
+            toursJoined = 0,
+            toursCompleted = 0,
+            totalDistance = 0f,
+            totalDuration = 0,
+            favoriteThemes = emptyList(),
+            averageRating = 0f
+        )
+
+        firestore.collection(USER_STATS_COLLECTION)
+            .document(uid)
+            .set(initialStats)
+            .await()
+
+        // Initialize user settings
+        val initialSettings = FirestoreUserSettings(
+            notificationsEnabled = true,
+            locationPermissionGranted = false,
+            language = "en",
+            currency = "USD",
+            theme = "system"
+        )
+
+        firestore.collection(USER_SETTINGS_COLLECTION)
+            .document(uid)
+            .set(initialSettings)
+            .await()
     }
 
     private fun mapAuthException(exception: Throwable): Exception {

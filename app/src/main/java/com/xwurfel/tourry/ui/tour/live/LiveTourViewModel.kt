@@ -13,6 +13,7 @@ import com.xwurfel.tourry.feature.geofencing.GeofencingManager
 import com.xwurfel.tourry.feature.geofencing.TourStopGeofence
 import com.xwurfel.tourry.feature.location.service.LocationService
 import com.xwurfel.tourry.feature.mock.MockDataManager
+import com.xwurfel.tourry.feature.tours.domain.model.StopContent
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
@@ -274,8 +275,9 @@ class LiveTourViewModel @Inject constructor(
                         geofenceRadius = 50f,
                         content = StopContent(
                             text = stop.description,
-                            imageUrl = null, // Mock data doesn't have images yet
-                            audioUrl = null  // Mock data doesn't have audio yet
+                            imageUrls = emptyList(),
+                            audioUrl = null,
+                            videoUrl = null
                         )
                     )
                 }
@@ -552,9 +554,6 @@ data class LiveTourStop(
     val content: StopContent? = null
 )
 
-data class StopContent(
-    val text: String, val imageUrl: String? = null, val audioUrl: String? = null
-)
 
 data class UserLocation(
     val latitude: Double,

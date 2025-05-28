@@ -1,9 +1,9 @@
 package com.xwurfel.tourry.feature.analytics.di
 
 import android.content.Context
-import com.google.android.datatransport.runtime.dagger.Provides
 import com.xwurfel.tourry.feature.analytics.TourAnalytics
 import dagger.Module
+import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent

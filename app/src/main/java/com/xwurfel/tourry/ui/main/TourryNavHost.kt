@@ -68,6 +68,9 @@ fun TourryNavHost(
                         // Navigate to MyTours tab but don't clear profile from backstack
                         launchSingleTop = true
                     }
+                },
+                onNavigateToSignIn = {
+                    navController.navigate(authRoute)
                 }
             )
         }

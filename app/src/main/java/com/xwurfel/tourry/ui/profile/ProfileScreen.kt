@@ -61,6 +61,7 @@ import com.xwurfel.tourry.ui.main.LocalSnackbarHostState
 fun ProfileRoute(
     onNavigateToCreateTour: () -> Unit,
     onNavigateToMyTours: () -> Unit,
+    onNavigateToSignIn: () -> Unit,
     viewModel: ProfileViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -70,6 +71,7 @@ fun ProfileRoute(
         when (event) {
             ProfileEvent.NavigateToCreateTour -> onNavigateToCreateTour()
             ProfileEvent.NavigateToMyTours -> onNavigateToMyTours()
+            ProfileEvent.NavigateToSignIn -> onNavigateToSignIn()
         }
     }
 
@@ -81,36 +83,26 @@ fun ProfileRoute(
     }
 
     ProfileScreen(
-        uiState = uiState,
-        onIntent = viewModel::acceptIntent,
-        snackbarHostState = snackbarHostState
+        uiState = uiState, onIntent = viewModel::acceptIntent, snackbarHostState = snackbarHostState
     )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(
-    uiState: ProfileUiState,
-    onIntent: (ProfileIntent) -> Unit,
-    snackbarHostState: SnackbarHostState
+    uiState: ProfileUiState, onIntent: (ProfileIntent) -> Unit, snackbarHostState: SnackbarHostState
 ) {
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.nav_profile)) }
-            )
-        },
-        floatingActionButton = {
-            if (uiState.isAuthenticated) {
-                ExtendedFloatingActionButton(
-                    onClick = { onIntent(ProfileIntent.NavigateToCreateTour) },
-                    icon = { Icon(Icons.Default.Add, contentDescription = null) },
-                    text = { Text("Create Tour") }
-                )
-            }
-        },
-        snackbarHost = { SnackbarHost(snackbarHostState) }
-    ) { paddingValues ->
+    Scaffold(topBar = {
+        TopAppBar(
+            title = { Text(stringResource(R.string.nav_profile)) })
+    }, floatingActionButton = {
+        if (uiState.isAuthenticated) {
+            ExtendedFloatingActionButton(
+                onClick = { onIntent(ProfileIntent.NavigateToCreateTour) },
+                icon = { Icon(Icons.Default.Add, contentDescription = null) },
+                text = { Text("Create Tour") })
+        }
+    }, snackbarHost = { SnackbarHost(snackbarHostState) }) { paddingValues ->
         if (uiState.isLoading) {
             LoadingSection(paddingValues)
         } else {
@@ -124,8 +116,7 @@ fun ProfileScreen(
                 if (uiState.isAuthenticated && uiState.user != null) {
                     // Authenticated user content
                     UserProfileSection(
-                        user = uiState.user,
-                        stats = uiState.userStats
+                        user = uiState.user, stats = uiState.userStats
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))
@@ -135,8 +126,7 @@ fun ProfileScreen(
                     Spacer(modifier = Modifier.height(16.dp))
 
                     SettingsSection(
-                        settings = uiState.userSettings,
-                        onIntent = onIntent
+                        settings = uiState.userSettings, onIntent = onIntent
                     )
                 } else {
                     // Guest user section
@@ -145,8 +135,7 @@ fun ProfileScreen(
                             // Handle sign in through the mock data manager for now
                             // In a real app, this would navigate to auth screen
                             onIntent(ProfileIntent.SignIn)
-                        }
-                    )
+                        })
                 }
             }
         }
@@ -194,8 +183,7 @@ fun UserProfileSection(
                 .padding(20.dp)
         ) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+                modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically
             ) {
                 // Profile picture
                 if (user.avatarUrl != null) {
@@ -252,12 +240,10 @@ fun UserProfileSection(
                     horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
                     StatItem(
-                        label = "Tours Created",
-                        value = stats.toursCreated.toString()
+                        label = "Tours Created", value = stats.toursCreated.toString()
                     )
                     StatItem(
-                        label = "Tours Joined",
-                        value = stats.toursJoined.toString()
+                        label = "Tours Joined", value = stats.toursJoined.toString()
                     )
                 }
             }
@@ -267,8 +253,7 @@ fun UserProfileSection(
 
 @Composable
 fun StatItem(
-    label: String,
-    value: String
+    label: String, value: String
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally
@@ -312,8 +297,7 @@ fun QuickActionsSection(onIntent: (ProfileIntent) -> Unit) {
                     },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { onIntent(ProfileIntent.NavigateToCreateTour) }
-                )
+                        .clickable { onIntent(ProfileIntent.NavigateToCreateTour) })
 
                 HorizontalDivider()
 
@@ -322,14 +306,12 @@ fun QuickActionsSection(onIntent: (ProfileIntent) -> Unit) {
                     supportingContent = { Text("Manage your created and joined tours") },
                     leadingContent = {
                         Icon(
-                            Icons.Default.Tour,
-                            contentDescription = null
+                            Icons.Default.Tour, contentDescription = null
                         )
                     },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { onIntent(ProfileIntent.NavigateToMyTours) }
-                )
+                        .clickable { onIntent(ProfileIntent.NavigateToMyTours) })
             }
         }
     }
@@ -346,8 +328,7 @@ fun GuestProfileSection(onSignInClick: () -> Unit) {
         )
     ) {
         Column(
-            modifier = Modifier.padding(20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+            modifier = Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Icon(
                 Icons.Default.Person,
@@ -397,19 +378,15 @@ fun SettingsSection(
                     supportingContent = { Text("Get notified about tour updates") },
                     leadingContent = {
                         Icon(
-                            Icons.Default.Notifications,
-                            contentDescription = null
+                            Icons.Default.Notifications, contentDescription = null
                         )
                     },
                     trailingContent = {
                         Switch(
-                            checked = settings.notificationsEnabled,
-                            onCheckedChange = { enabled ->
+                            checked = settings.notificationsEnabled, onCheckedChange = { enabled ->
                                 onIntent(ProfileIntent.UpdateNotificationSettings(enabled))
-                            }
-                        )
-                    }
-                )
+                            })
+                    })
 
                 HorizontalDivider()
 
@@ -419,8 +396,7 @@ fun SettingsSection(
                     supportingContent = { Text("Required for geofencing during tours") },
                     leadingContent = {
                         Icon(
-                            Icons.Default.LocationOn,
-                            contentDescription = null
+                            Icons.Default.LocationOn, contentDescription = null
                         )
                     },
                     trailingContent = {
@@ -428,10 +404,8 @@ fun SettingsSection(
                             checked = settings.locationPermissionGranted,
                             onCheckedChange = { granted ->
                                 onIntent(ProfileIntent.UpdateLocationPermission(granted))
-                            }
-                        )
-                    }
-                )
+                            })
+                    })
 
                 HorizontalDivider()
 
@@ -439,8 +413,7 @@ fun SettingsSection(
                 ListItem(
                     headlineContent = {
                         Text(
-                            "Sign Out",
-                            color = MaterialTheme.colorScheme.error
+                            "Sign Out", color = MaterialTheme.colorScheme.error
                         )
                     },
                     supportingContent = {
@@ -458,8 +431,7 @@ fun SettingsSection(
                     },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { onIntent(ProfileIntent.SignOut) }
-                )
+                        .clickable { onIntent(ProfileIntent.SignOut) })
             }
         }
     }

@@ -6,7 +6,8 @@ plugins {
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
     alias(libs.plugins.kotlin.serialization)
-    id("com.google.gms.google-services")
+    alias(libs.plugins.gms.google.services)
+    alias(libs.plugins.firebase.crashlytics)
 }
 
 android {
@@ -126,7 +127,11 @@ dependencies {
     implementation(libs.firebase.database)
     implementation(libs.firebase.messaging.ktx)
     implementation(libs.firebase.auth)
-    implementation(libs.firebase.firestore.ktx)
+    implementation(libs.firebase.firestore)
+    implementation(libs.firebase.storage.ktx)
+    implementation(libs.firebase.analytics.ktx)
+    implementation(libs.firebase.functions.ktx)
+    implementation(libs.firebase.crashlytics.ktx)
 
     //Datastore
     implementation(libs.androidx.datastore.preferences)
