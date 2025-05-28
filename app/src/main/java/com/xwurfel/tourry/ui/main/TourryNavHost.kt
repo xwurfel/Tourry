@@ -60,13 +60,7 @@ fun TourryNavHost(
 
         composable(profileRoute) {
             ProfileRoute(
-                onNavigateToAuth = {
-                    navController.navigate(authRoute) {
-                        // Don't clear the profile screen from backstack
-                        // so user can return to it after auth
-                    }
-                },
-                onNavigateToTourCreation = {
+                onNavigateToCreateTour = {
                     navController.navigate(tourCreationRoute)
                 },
                 onNavigateToMyTours = {

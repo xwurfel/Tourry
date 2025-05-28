@@ -1,8 +1,8 @@
 package com.xwurfel.tourry.feature.mock
 
+import com.xwurfel.tourry.feature.profile.domain.model.User
+import com.xwurfel.tourry.feature.profile.domain.model.UserStats
 import com.xwurfel.tourry.ui.explore.TourPreview
-import com.xwurfel.tourry.ui.profile.UserProfile
-import com.xwurfel.tourry.ui.profile.UserStats
 import com.xwurfel.tourry.ui.tour.detail.TourDetail
 import com.xwurfel.tourry.ui.tour.detail.TourGuide
 import com.xwurfel.tourry.ui.tour.detail.TourStopDetail
@@ -45,25 +45,20 @@ class MockDataManager @Inject constructor() {
     private val _currentUserId = MutableStateFlow<String?>(null)
     val currentUserId: StateFlow<String?> = _currentUserId.asStateFlow()
 
-    private val _currentUserProfile = MutableStateFlow<UserProfile?>(null)
-    val currentUserProfile: StateFlow<UserProfile?> = _currentUserProfile.asStateFlow()
+    private val _currentUserProfile = MutableStateFlow<User?>(null)
+    val currentUserProfile: StateFlow<User?> = _currentUserProfile.asStateFlow()
 
     private val _userStats = MutableStateFlow<UserStats?>(null)
     val userStats: StateFlow<UserStats?> = _userStats.asStateFlow()
 
     // Settings state
-    private val _notificationsEnabled = MutableStateFlow(true)
-    val notificationsEnabled: StateFlow<Boolean> = _notificationsEnabled.asStateFlow()
-
-    private val _locationSharingEnabled = MutableStateFlow(true)
-    val locationSharingEnabled: StateFlow<Boolean> = _locationSharingEnabled.asStateFlow()
 
     // Live tour simulation
     private val _liveTours = MutableStateFlow<Set<String>>(emptySet())
     val liveTours: StateFlow<Set<String>> = _liveTours.asStateFlow()
 
     // Enhanced user data storage
-    private val userProfiles = mutableMapOf<String, UserProfile>()
+    private val userProfiles = mutableMapOf<String, User>()
     private val userStatsMap = mutableMapOf<String, UserStats>()
     private val userPreferences = mutableMapOf<String, UserPreferences>()
 
@@ -74,7 +69,7 @@ class MockDataManager @Inject constructor() {
     }
 
     // Enhanced Profile Management
-    suspend fun loadUserProfile(userId: String): UserProfile? {
+    suspend fun loadUserProfile(userId: String): User? {
         delay(800) // Simulate network delay
         return userProfiles[userId]?.let { profile ->
             // Always return profile with latest stats
@@ -88,109 +83,6 @@ class MockDataManager @Inject constructor() {
         return userStatsMap[userId]
     }
 
-    suspend fun updateUserProfile(userId: String, profile: UserProfile): Boolean {
-        delay(1000) // Simulate network delay
-
-        return try {
-            // Store the updated profile
-            userProfiles[userId] = profile
-
-            // Update the current profile state with embedded stats
-            val currentStats = userStatsMap[userId]
-            val profileWithStats = profile.copy(stats = currentStats)
-            _currentUserProfile.value = profileWithStats
-
-            // Simulate profile validation
-            if (profile.name.isBlank()) {
-                throw IllegalArgumentException("Name cannot be empty")
-            }
-            if (profile.email.isNotBlank() && !isValidEmail(profile.email)) {
-                throw IllegalArgumentException("Invalid email format")
-            }
-
-            true
-        } catch (e: Exception) {
-            false
-        }
-    }
-
-    suspend fun uploadProfileAvatar(userId: String, imageUri: String): String? {
-        delay(2000) // Simulate upload time
-
-        return try {
-            // Simulate upload success/failure (95% success rate)
-            if (Random.nextFloat() < 0.95f) {
-                // Generate a realistic mock URL
-                val mockAvatarUrl =
-                    "https://api.tourry.app/avatars/${userId}_${System.currentTimeMillis()}.jpg"
-
-                // Update the current profile with new avatar
-                _currentUserProfile.value?.let { currentProfile ->
-                    val updatedProfile = currentProfile.copy(avatarUrl = mockAvatarUrl)
-                    userProfiles[userId] = updatedProfile
-                    _currentUserProfile.value = updatedProfile
-                }
-
-                mockAvatarUrl
-            } else {
-                null // Simulate upload failure
-            }
-        } catch (e: Exception) {
-            null
-        }
-    }
-
-    suspend fun deleteAccount(userId: String): Boolean {
-        delay(1500)
-
-        return try {
-            // Remove user data
-            userProfiles.remove(userId)
-            userStatsMap.remove(userId)
-            userPreferences.remove(userId)
-
-            // Remove user's created tours
-            val userCreatedTours = _createdTours.value.filter {
-                it.id.startsWith("created_${userId}_")
-            }
-            _createdTours.value = _createdTours.value.filterNot {
-                it.id.startsWith("created_${userId}_")
-            }
-
-            // Remove user from joined tours
-            _joinedTourIds.value = emptySet()
-
-            // Sign out user
-            signOut()
-            true
-        } catch (e: Exception) {
-            false
-        }
-    }
-
-    // Enhanced Settings Management
-    suspend fun updateNotificationSettings(enabled: Boolean): Boolean {
-        delay(300)
-        val currentUserId = _currentUserId.value
-        if (currentUserId != null) {
-            val prefs = userPreferences[currentUserId] ?: UserPreferences()
-            userPreferences[currentUserId] = prefs.copy(notificationsEnabled = enabled)
-        }
-        _notificationsEnabled.value = enabled
-        return true
-    }
-
-    suspend fun updateLocationSharingSettings(enabled: Boolean): Boolean {
-        delay(300)
-        val currentUserId = _currentUserId.value
-        if (currentUserId != null) {
-            val prefs = userPreferences[currentUserId] ?: UserPreferences()
-            userPreferences[currentUserId] = prefs.copy(locationSharingEnabled = enabled)
-        }
-        _locationSharingEnabled.value = enabled
-        return true
-    }
-
     // Enhanced Authentication
     fun signIn(userId: String, userType: String = "email") {
         _isAuthenticated.value = true
@@ -198,14 +90,9 @@ class MockDataManager @Inject constructor() {
 
         scope.launch {
             // Load or create user profile
-            val profile = loadUserProfile(userId) ?: createDefaultProfile(userId, userType)
             val stats = loadUserStats(userId) ?: createDefaultStats(userId)
-            val prefs = userPreferences[userId] ?: UserPreferences()
 
-            _currentUserProfile.value = profile.copy(stats = stats)
             _userStats.value = stats
-            _notificationsEnabled.value = prefs.notificationsEnabled
-            _locationSharingEnabled.value = prefs.locationSharingEnabled
 
             // Load user's created and joined tours
             loadUserTours(userId)
@@ -218,8 +105,6 @@ class MockDataManager @Inject constructor() {
         _currentUserProfile.value = null
         _userStats.value = null
         _joinedTourIds.value = emptySet()
-        _notificationsEnabled.value = true
-        _locationSharingEnabled.value = true
     }
 
     // Enhanced Analytics and Statistics
@@ -274,11 +159,6 @@ class MockDataManager @Inject constructor() {
             currentJoined.add(tourId)
             _joinedTourIds.value = currentJoined
             updateTourSpots(tourId, -1)
-
-            // Update user stats
-            _currentUserId.value?.let { userId ->
-                updateUserStatsAfterJoin(userId)
-            }
         }
         return true
     }
@@ -319,12 +199,6 @@ class MockDataManager @Inject constructor() {
 
         val updatedAvailableTours = _availableTours.value + newTourPreview
         _availableTours.value = updatedAvailableTours
-
-        // Update user stats
-        currentUserId.let { userId ->
-            updateUserStatsAfterCreate(userId)
-        }
-
         return newTourId
     }
 
@@ -365,46 +239,34 @@ class MockDataManager @Inject constructor() {
     }
 
     // Private helper methods
-    private fun createDefaultProfile(userId: String, userType: String): UserProfile {
+    private fun createDefaultProfile(userId: String, userType: String): User {
         val profile = when {
-            userId.startsWith("google_") -> UserProfile(
+            userId.startsWith("google_") -> User(
                 id = userId,
                 name = "John Doe",
                 email = "john.doe@gmail.com",
                 avatarUrl = generateRandomAvatarUrl(),
-                bio = "Travel enthusiast and local explorer. I love discovering hidden gems and sharing unique experiences with fellow adventurers.",
-                rating = 4.8f,
-                reviewsCount = 23
             )
 
-            userId.startsWith("email_") -> UserProfile(
+            userId.startsWith("email_") -> User(
                 id = userId,
                 name = "Jane Smith",
                 email = "jane.smith@example.com",
                 avatarUrl = generateRandomAvatarUrl(),
-                bio = "I love discovering hidden gems in my city and creating memorable experiences for others to enjoy.",
-                rating = 4.6f,
-                reviewsCount = 15
             )
 
-            userId.startsWith("guest_") -> UserProfile(
+            userId.startsWith("guest_") -> User(
                 id = userId,
                 name = "Guest User",
                 email = "",
                 avatarUrl = null,
-                bio = "",
-                rating = 0f,
-                reviewsCount = 0
             )
 
-            else -> UserProfile(
+            else -> User(
                 id = userId,
                 name = generateRandomName(),
                 email = "${userId.lowercase()}@example.com",
                 avatarUrl = generateRandomAvatarUrl(),
-                bio = generateRandomBio(),
-                rating = 4.9f,
-                reviewsCount = Random.nextInt(30, 100)
             )
         }
 
@@ -417,50 +279,19 @@ class MockDataManager @Inject constructor() {
             UserStats(
                 toursCreated = 0,
                 toursJoined = 0,
-                totalParticipants = 0,
-                totalRatings = 0f,
-                averageRating = 0f
             )
         } else {
             val toursCreated = Random.nextInt(0, 12)
             val toursJoined = Random.nextInt(5, 25)
-            val totalParticipants = Random.nextInt(10, 150)
 
             UserStats(
                 toursCreated = toursCreated,
                 toursJoined = toursJoined,
-                totalParticipants = totalParticipants,
-                totalRatings = Random.nextFloat() * 50,
-                averageRating = 4.0f + Random.nextFloat()
             )
         }
 
         userStatsMap[userId] = stats
         return stats
-    }
-
-    private fun updateUserStatsAfterJoin(userId: String) {
-        val currentStats = userStatsMap[userId] ?: createDefaultStats(userId)
-        val updatedStats = currentStats.copy(toursJoined = currentStats.toursJoined + 1)
-        userStatsMap[userId] = updatedStats
-        _userStats.value = updatedStats
-
-        // Update profile with new stats
-        _currentUserProfile.value?.let { profile ->
-            _currentUserProfile.value = profile.copy(stats = updatedStats)
-        }
-    }
-
-    private fun updateUserStatsAfterCreate(userId: String) {
-        val currentStats = userStatsMap[userId] ?: createDefaultStats(userId)
-        val updatedStats = currentStats.copy(toursCreated = currentStats.toursCreated + 1)
-        userStatsMap[userId] = updatedStats
-        _userStats.value = updatedStats
-
-        // Update profile with new stats
-        _currentUserProfile.value?.let { profile ->
-            _currentUserProfile.value = profile.copy(stats = updatedStats)
-        }
     }
 
     private fun loadUserTours(userId: String) {

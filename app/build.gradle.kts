@@ -125,11 +125,15 @@ dependencies {
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.database)
     implementation(libs.firebase.messaging.ktx)
+    implementation(libs.firebase.auth)
+
 
     //Datastore
     implementation(libs.androidx.datastore.preferences)
 
     implementation(libs.kotlinx.coroutines.play.services)
+    implementation(libs.play.services.auth)
+
 
     implementation(libs.androidx.lifecycle.service)
 
