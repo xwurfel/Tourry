@@ -160,12 +160,6 @@ class FirebaseUserRepositoryImpl @Inject constructor(
         awaitClose { firebaseAuth.removeAuthStateListener(authStateListener) }
     }
 
-    override suspend fun signInWithGoogle(): DomainResult<User> = result {
-        throw UnsupportedOperationException(
-            "Use signInWithGoogleCredential after getting the ID token from Google Sign-In activity result"
-        )
-    }
-
     override suspend fun signInWithGoogleCredential(idToken: String): DomainResult<User> = result {
         try {
             val credential = GoogleAuthProvider.getCredential(idToken, null)

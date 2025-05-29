@@ -282,19 +282,25 @@ fun ScheduleStep(
 
     // Date Picker Dialog
     if (showDatePicker) {
-        DatePickerDialog(onDismissRequest = { showDatePicker = false }, confirmButton = {
-            TextButton(onClick = { showDatePicker = false }) {
-                Text("OK")
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = { showDatePicker = false }) {
+                    Text("OK")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) {
+                    Text("Cancel")
+                }
             }
-        }, dismissButton = {
-            TextButton(onClick = { showDatePicker = false }) {
-                Text("Cancel")
-            }
-        }) {
+        ) {
             DatePicker(
                 state = datePickerState,
                 title = { Text("Select tour date") },
-                headline = { Text("Choose when your tour starts") })
+                headline = { Text("Choose when your tour starts") },
+                modifier = Modifier.padding(16.dp)
+            )
         }
     }
 
