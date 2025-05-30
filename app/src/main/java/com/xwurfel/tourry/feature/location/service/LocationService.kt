@@ -49,11 +49,14 @@ class LocationService : Service() {
 
     private var currentTourId: String? = null
     private var isTrackingLocation = false
+    private var lastKnownLocation: Location? = null
 
     private val locationCallback = object : LocationCallback() {
         override fun onLocationResult(result: LocationResult) {
             result.lastLocation?.let { location ->
+                lastKnownLocation = location
                 _locationUpdates.tryEmit(location)
+                Timber.d("Location update: ${location.latitude}, ${location.longitude} (accuracy: ${location.accuracy}m)")
             }
         }
     }
@@ -61,6 +64,7 @@ class LocationService : Service() {
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
+        Timber.d("LocationService created")
     }
 
     override fun onBind(intent: Intent?): IBinder = binder
@@ -69,7 +73,7 @@ class LocationService : Service() {
         when (intent?.action) {
             ACTION_START_LOCATION_SERVICE -> {
                 val tourId = intent.getStringExtra(EXTRA_TOUR_ID)
-                val tourTitle = intent.getStringExtra(EXTRA_TOUR_TITLE) ?: "Tour"
+                val tourTitle = intent.getStringExtra(EXTRA_TOUR_TITLE) ?: "Live Tour"
 
                 if (hasRequiredPermissions()) {
                     startLocationTracking(tourId, tourTitle)
@@ -87,10 +91,18 @@ class LocationService : Service() {
     }
 
     fun startLocationTracking(tourId: String?, tourTitle: String) {
-        if (isTrackingLocation) return
+        if (isTrackingLocation) {
+            Timber.d("Location tracking already active")
+            return
+        }
 
         if (!hasRequiredPermissions()) {
             Timber.e("Cannot start location tracking: missing permissions")
+            return
+        }
+
+        if (!isLocationEnabled()) {
+            Timber.e("Location services are disabled")
             return
         }
 
@@ -100,26 +112,30 @@ class LocationService : Service() {
 
             val notification = createNotification(tourTitle)
 
-            // Use ServiceCompat for better compatibility
+            // Start foreground service
             ServiceCompat.startForeground(
                 this,
                 NOTIFICATION_ID,
                 notification,
-                if (Build.VERSION.SDK_INT >= 29) { // API 29 = Android 10
+                if (Build.VERSION.SDK_INT >= 29) {
                     ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
                 } else {
                     0
                 }
             )
 
+            // Create location request with appropriate settings for live tours
             val locationRequest = LocationRequest.Builder(
                 Priority.PRIORITY_HIGH_ACCURACY,
                 LOCATION_UPDATE_INTERVAL
             ).apply {
                 setMinUpdateDistanceMeters(MIN_UPDATE_DISTANCE)
+                setMaxUpdateDelayMillis(MAX_UPDATE_DELAY)
                 setWaitForAccurateLocation(false)
+                setMinUpdateIntervalMillis(MIN_UPDATE_INTERVAL)
             }.build()
 
+            // Request location updates
             fusedLocationClient.requestLocationUpdates(
                 locationRequest,
                 locationCallback,
@@ -138,7 +154,10 @@ class LocationService : Service() {
     }
 
     fun stopLocationTracking() {
-        if (!isTrackingLocation) return
+        if (!isTrackingLocation) {
+            Timber.d("Location tracking already stopped")
+            return
+        }
 
         isTrackingLocation = false
         currentTourId = null
@@ -155,13 +174,15 @@ class LocationService : Service() {
         Timber.d("Location tracking stopped")
     }
 
+    fun getLastKnownLocation(): Location? = lastKnownLocation
+
     private fun hasRequiredPermissions(): Boolean {
         val hasFineLocation = ActivityCompat.checkSelfPermission(
             this,
             Manifest.permission.ACCESS_FINE_LOCATION
         ) == PackageManager.PERMISSION_GRANTED
 
-        val hasForegroundService = if (Build.VERSION.SDK_INT >= 34) { // API 34 = Android 14
+        val hasForegroundService = if (Build.VERSION.SDK_INT >= 34) {
             ActivityCompat.checkSelfPermission(
                 this,
                 Manifest.permission.FOREGROUND_SERVICE_LOCATION
@@ -171,6 +192,13 @@ class LocationService : Service() {
         }
 
         return hasFineLocation && hasForegroundService
+    }
+
+    private fun isLocationEnabled(): Boolean {
+        val locationManager = getSystemService(Context.LOCATION_SERVICE)
+                as android.location.LocationManager
+        return locationManager.isProviderEnabled(android.location.LocationManager.GPS_PROVIDER) ||
+                locationManager.isProviderEnabled(android.location.LocationManager.NETWORK_PROVIDER)
     }
 
     private fun createNotification(tourTitle: String): Notification {
@@ -191,6 +219,7 @@ class LocationService : Service() {
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
     }
 
@@ -202,6 +231,8 @@ class LocationService : Service() {
         ).apply {
             description = getString(R.string.location_tracking_channel_description)
             setShowBadge(false)
+            enableLights(false)
+            enableVibration(false)
         }
 
         val notificationManager =
@@ -213,6 +244,7 @@ class LocationService : Service() {
         super.onDestroy()
         serviceScope.cancel()
         stopLocationTracking()
+        Timber.d("LocationService destroyed")
     }
 
     inner class LocationBinder : Binder() {
@@ -227,8 +259,12 @@ class LocationService : Service() {
 
         private const val CHANNEL_ID = "location_tracking"
         private const val NOTIFICATION_ID = 1001
-        private const val LOCATION_UPDATE_INTERVAL = 5000L // 5 seconds
-        private const val MIN_UPDATE_DISTANCE = 5f // 5 meters
+
+        // Location update settings optimized for live tours
+        private const val LOCATION_UPDATE_INTERVAL = 3000L // 3 seconds for responsive tracking
+        private const val MIN_UPDATE_INTERVAL = 1000L // 1 second minimum
+        private const val MAX_UPDATE_DELAY = 5000L // 5 seconds maximum delay
+        private const val MIN_UPDATE_DISTANCE = 3f // 3 meters to reduce noise
 
         fun getStartIntent(context: Context, tourId: String, tourTitle: String): Intent {
             return Intent(context, LocationService::class.java).apply {
