@@ -1,9 +1,10 @@
 package com.xwurfel.tourry.ui.tour.live
 
-import android.content.Context
 import androidx.lifecycle.SavedStateHandle
 import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.SphericalUtil
+import com.xwurfel.tourry.core.domain.util.onFailure
+import com.xwurfel.tourry.core.domain.util.onSuccess
 import com.xwurfel.tourry.core.ui.MviViewModel
 import com.xwurfel.tourry.feature.analytics.TourAnalytics
 import com.xwurfel.tourry.feature.audio.AudioPlayerManager
@@ -11,10 +12,12 @@ import com.xwurfel.tourry.feature.audio.PlaybackState
 import com.xwurfel.tourry.feature.geofencing.GeofenceEvent
 import com.xwurfel.tourry.feature.geofencing.GeofencingManager
 import com.xwurfel.tourry.feature.location.LocationManager
-import com.xwurfel.tourry.feature.mock.MockDataManager
-import com.xwurfel.tourry.feature.tours.domain.model.StopContent
+import com.xwurfel.tourry.feature.tours.domain.model.LiveTourStop
+import com.xwurfel.tourry.feature.tours.domain.usecase.CompleteTourSessionUseCase
+import com.xwurfel.tourry.feature.tours.domain.usecase.GetLiveTourUseCase
+import com.xwurfel.tourry.feature.tours.domain.usecase.RecordStopVisitUseCase
+import com.xwurfel.tourry.feature.tours.domain.usecase.StartTourSessionUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flow
@@ -25,21 +28,23 @@ import javax.inject.Inject
 @HiltViewModel
 class LiveTourViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
-    @ApplicationContext private val context: Context,
     private val locationManager: LocationManager,
     private val geofencingManager: GeofencingManager,
-    private val mockDataManager: MockDataManager,
     private val audioPlayerManager: AudioPlayerManager,
     private val tourAnalytics: TourAnalytics,
+    private val getLiveTourUseCase: GetLiveTourUseCase,
+    private val startTourSessionUseCase: StartTourSessionUseCase,
+    private val recordStopVisitUseCase: RecordStopVisitUseCase,
+    private val completeTourSessionUseCase: CompleteTourSessionUseCase,
 ) : MviViewModel<LiveTourUiState, LiveTourPartialState, LiveTourEvent, LiveTourIntent>(
     initialState = LiveTourUiState()
 ) {
 
     private val tourId: String = savedStateHandle.get<String>("tourId") ?: ""
+    private var currentSessionId: String? = null
+    private var tourStartTime: Long = 0L
 
     init {
-        tourAnalytics.startTourSession(tourId, "", false)
-
         observeContinuousChanges(
             loadTourData(),
             observeLocationUpdates(),
@@ -51,7 +56,7 @@ class LiveTourViewModel @Inject constructor(
     override fun mapIntents(intent: LiveTourIntent): Flow<LiveTourPartialState> = flow {
         when (intent) {
             LiveTourIntent.StartLocationTracking -> {
-                handleStartLocationTracking()
+                emit(startLocationTracking())
             }
 
             LiveTourIntent.PauseTour -> {
@@ -62,11 +67,12 @@ class LiveTourViewModel @Inject constructor(
 
             LiveTourIntent.ResumeTour -> {
                 locationManager.startLocationUpdates()
+                tourAnalytics.trackTourResumed(tourId)
                 emit(LiveTourPartialState.TourResumed)
             }
 
             LiveTourIntent.CompleteTour -> {
-                handleTourCompletion()
+                emit(completeTour())
             }
 
             LiveTourIntent.ExitTour -> {
@@ -75,7 +81,7 @@ class LiveTourViewModel @Inject constructor(
             }
 
             is LiveTourIntent.OnGeofenceEntered -> {
-                handleGeofenceEntered(intent.stopId)
+                emit(handleGeofenceEntered(intent.stopId))
             }
 
             is LiveTourIntent.OnGeofenceExited -> {
@@ -92,11 +98,20 @@ class LiveTourViewModel @Inject constructor(
 
             is LiveTourIntent.PlayAudio -> {
                 handleAudioPlayback(intent.audioUrl)
+                emit(LiveTourPartialState.AudioStarted(intent.audioUrl))
             }
 
-            LiveTourIntent.PauseAudio -> audioPlayerManager.pause()
-            LiveTourIntent.ResumeAudio -> audioPlayerManager.play()
-            LiveTourIntent.StopAudio -> audioPlayerManager.stop()
+            LiveTourIntent.PauseAudio -> {
+                audioPlayerManager.pause()
+            }
+
+            LiveTourIntent.ResumeAudio -> {
+                audioPlayerManager.play()
+            }
+
+            LiveTourIntent.StopAudio -> {
+                audioPlayerManager.stop()
+            }
 
             is LiveTourIntent.SeekAudio -> {
                 audioPlayerManager.seekTo(intent.position)
@@ -128,17 +143,7 @@ class LiveTourViewModel @Inject constructor(
 
             is LiveTourPartialState.LocationUpdated -> {
                 val updatedState = previousState.copy(userLocation = partialState.location)
-
-                // Check for route deviation
-                val deviation = checkRouteDeviation(partialState.location, updatedState.tourStops)
-                if (deviation.isDeviated && !updatedState.showRouteDeviationWarning) {
-                    updatedState.copy(
-                        routeDeviation = deviation,
-                        showRouteDeviationWarning = true
-                    )
-                } else {
-                    updatedState
-                }
+                checkAndHandleRouteDeviation(updatedState, partialState.location)
             }
 
             LiveTourPartialState.TourPaused -> previousState.copy(
@@ -214,69 +219,81 @@ class LiveTourViewModel @Inject constructor(
         }
     }
 
-    private suspend fun handleStartLocationTracking() {
-        try {
+    // Private helper methods that return partial states instead of emitting
+    private suspend fun startLocationTracking(): LiveTourPartialState {
+        return try {
             if (!locationManager.hasLocationPermission()) {
-                emit(LiveTourPartialState.LocationPermissionDenied)
-                return
+                return LiveTourPartialState.LocationPermissionDenied
+            }
+
+            // Start tour session
+            val sessionResult = startTourSessionUseCase(tourId, getCurrentUserId())
+            sessionResult.onSuccess { sessionId ->
+                currentSessionId = sessionId
+                tourStartTime = System.currentTimeMillis()
+            }.onFailure { error ->
+                return LiveTourPartialState.Error("Failed to start tour session: ${error.msg}")
             }
 
             locationManager.startLocationUpdates()
             setupGeofencing()
-            emit(LiveTourPartialState.LocationTrackingStarted)
+            tourAnalytics.startTourSession(tourId, "", false)
 
+            LiveTourPartialState.LocationTrackingStarted
         } catch (e: Exception) {
             Timber.e(e, "Failed to start location tracking")
-            emit(LiveTourPartialState.LocationServiceError("Failed to start location tracking"))
+            LiveTourPartialState.LocationServiceError("Failed to start location tracking")
         }
     }
 
-    private suspend fun handleTourCompletion() {
-        val state = uiStateSnapshot.value
-        val completionPercentage =
-            state.visitedStopsCount.toFloat() / state.tourStops.size.coerceAtLeast(1)
+    private suspend fun completeTour(): LiveTourPartialState {
+        return try {
+            val state = uiStateSnapshot.value
+            val completionPercentage =
+                state.visitedStopsCount.toFloat() / state.tourStops.size.coerceAtLeast(1)
+            val totalDuration = System.currentTimeMillis() - tourStartTime
 
-        tourAnalytics.endTourSession(
-            tourId = tourId,
-            completionPercentage = completionPercentage
-        )
+            currentSessionId?.let { sessionId ->
+                completeTourSessionUseCase(sessionId, completionPercentage, totalDuration)
+                    .onFailure { error ->
+                        Timber.e("Failed to complete tour session: ${error.msg}")
+                    }
+            }
 
-        locationManager.stopLocationUpdates()
-        geofencingManager.removeAllGeofences()
-        audioPlayerManager.release()
+            tourAnalytics.endTourSession(tourId, completionPercentage)
+            cleanupResources()
 
-        emit(LiveTourPartialState.TourCompleted)
-        publishEvent(LiveTourEvent.TourCompleted)
+            // Trigger navigation to summary
+            publishEvent(LiveTourEvent.TourCompleted)
+            LiveTourPartialState.TourCompleted
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to complete tour")
+            LiveTourPartialState.Error("Failed to complete tour: ${e.message}")
+        }
     }
 
-    private suspend fun handleTourExit() {
-        locationManager.stopLocationUpdates()
-        geofencingManager.removeAllGeofences()
-        audioPlayerManager.release()
-
-        // Track incomplete tour
-        val state = uiStateSnapshot.value
-        val completionPercentage =
-            state.visitedStopsCount.toFloat() / state.tourStops.size.coerceAtLeast(1)
-        tourAnalytics.endTourSession(tourId, completionPercentage)
-    }
-
-    private suspend fun handleGeofenceEntered(stopId: String) {
+    private suspend fun handleGeofenceEntered(stopId: String): LiveTourPartialState {
         val currentStops = uiStateSnapshot.value.tourStops
         val stop = currentStops.find { it.id == stopId }
 
         if (stop != null) {
-            tourAnalytics.trackStopVisited(
-                tourId = tourId,
-                stopId = stopId,
-                stopName = stop.name
-            )
+            // Record stop visit
+            currentSessionId?.let { sessionId ->
+                val userLocation = uiStateSnapshot.value.userLocation
+                userLocation?.let { location ->
+                    recordStopVisitUseCase(
+                        sessionId = sessionId,
+                        stopId = stopId,
+                        timestamp = System.currentTimeMillis(),
+                        userLocation = Pair(location.latitude, location.longitude)
+                    ).onFailure { error ->
+                        Timber.e("Failed to record stop visit: ${error.msg}")
+                    }
+                }
+            }
 
-            tourAnalytics.trackGeofenceEvent(
-                tourId = tourId,
-                stopId = stopId,
-                eventType = "enter"
-            )
+            tourAnalytics.trackStopVisited(tourId, stopId, stop.name)
+            tourAnalytics.trackGeofenceEvent(tourId, stopId, "enter")
 
             // Auto-play audio if available
             stop.content?.audioUrl?.let { audioUrl ->
@@ -284,10 +301,24 @@ class LiveTourViewModel @Inject constructor(
             }
         }
 
-        emit(LiveTourPartialState.GeofenceEntered(stopId))
+        return LiveTourPartialState.GeofenceEntered(stopId)
     }
 
-    private suspend fun handleAudioPlayback(audioUrl: String) {
+    private fun handleTourExit() {
+        cleanupResources()
+        val state = uiStateSnapshot.value
+        val completionPercentage =
+            state.visitedStopsCount.toFloat() / state.tourStops.size.coerceAtLeast(1)
+        tourAnalytics.endTourSession(tourId, completionPercentage)
+    }
+
+    private fun cleanupResources() {
+        locationManager.stopLocationUpdates()
+        geofencingManager.removeAllGeofences()
+        audioPlayerManager.release()
+    }
+
+    private fun handleAudioPlayback(audioUrl: String) {
         try {
             tourAnalytics.trackAudioPlayed(
                 tourId = tourId,
@@ -298,11 +329,23 @@ class LiveTourViewModel @Inject constructor(
 
             audioPlayerManager.loadAudio(audioUrl)
             audioPlayerManager.play()
-            emit(LiveTourPartialState.AudioStarted(audioUrl))
-
         } catch (e: Exception) {
             Timber.e(e, "Failed to play audio")
-            emit(LiveTourPartialState.Error("Failed to play audio: ${e.message}"))
+        }
+    }
+
+    private fun checkAndHandleRouteDeviation(
+        updatedState: LiveTourUiState,
+        location: UserLocation
+    ): LiveTourUiState {
+        val deviation = checkRouteDeviation(location, updatedState.tourStops)
+        return if (deviation.isDeviated && !updatedState.showRouteDeviationWarning) {
+            updatedState.copy(
+                routeDeviation = deviation,
+                showRouteDeviationWarning = true
+            )
+        } else {
+            updatedState
         }
     }
 
@@ -333,31 +376,29 @@ class LiveTourViewModel @Inject constructor(
 
     private fun loadTourData(): Flow<LiveTourPartialState> = flow {
         emit(LiveTourPartialState.Loading)
-        try {
-            val tourDetail = mockDataManager.getTourDetail(tourId)
-            if (tourDetail != null) {
-                val liveStops = tourDetail.stops.mapIndexed { index, stop ->
-                    LiveTourStop(
-                        id = stop.id,
-                        name = stop.name,
-                        latitude = stop.latitude,
-                        longitude = stop.longitude,
-                        order = index + 1,
-                        geofenceRadius = 50f,
-                        content = StopContent(
-                            text = stop.description,
-                            imageUrls = emptyList(), // Add when available in mock data
-                            audioUrl = generateMockAudioUrl(stop.id) // Mock audio URLs
-                        )
-                    )
-                }
-                emit(LiveTourPartialState.TourDataLoaded(tourDetail.title, liveStops))
-            } else {
-                emit(LiveTourPartialState.Error("Tour not found"))
+
+        getLiveTourUseCase(tourId)
+            .onSuccess { liveTour ->
+                emit(
+                    LiveTourPartialState.TourDataLoaded(
+                        title = liveTour.title,
+                        stops = liveTour.stops.map { stop ->
+                            LiveTourStop(
+                                id = stop.id,
+                                name = stop.name,
+                                latitude = stop.latitude,
+                                longitude = stop.longitude,
+                                order = stop.order,
+                                geofenceRadius = stop.geofenceRadius,
+                                content = stop.content,
+                                description = stop.description
+                            )
+                        }
+                    ))
             }
-        } catch (e: Exception) {
-            emit(LiveTourPartialState.Error("Failed to load tour data: ${e.message}"))
-        }
+            .onFailure { error ->
+                emit(LiveTourPartialState.Error("Failed to load tour: ${error.msg}"))
+            }
     }
 
     private fun observeLocationUpdates(): Flow<LiveTourPartialState> {
@@ -452,24 +493,14 @@ class LiveTourViewModel @Inject constructor(
         return RouteDeviation(isDeviated, distanceToRoute, nearestStop?.name)
     }
 
-    private fun generateMockAudioUrl(stopId: String): String {
-        // Generate mock audio URLs for demonstration
-        return "https://www.soundjay.com/misc/sounds/bell-ringing-05.wav"
+    private fun getCurrentUserId(): String {
+        // TODO: Get current user ID from authentication repository
+        return "current_user_id"
     }
 
     override fun onCleared() {
         super.onCleared()
-
-        val state = uiStateSnapshot.value
-        if (state.tourStatus != TourStatus.COMPLETED) {
-            val completionPercentage = state.visitedStopsCount.toFloat() /
-                    state.tourStops.size.coerceAtLeast(1)
-            tourAnalytics.endTourSession(tourId, completionPercentage)
-        }
-
-        locationManager.stopLocationUpdates()
-        audioPlayerManager.release()
-        geofencingManager.removeAllGeofences()
+        cleanupResources()
     }
 
     companion object {
@@ -563,22 +594,6 @@ sealed interface LiveTourIntent {
 sealed interface LiveTourEvent {
     object TourCompleted : LiveTourEvent
     object NavigateBack : LiveTourEvent
-}
-
-// Data Models
-data class LiveTourStop(
-    val id: String,
-    val name: String,
-    val latitude: Double,
-    val longitude: Double,
-    val order: Int,
-    val geofenceRadius: Float = 50f, // meters
-    val isActive: Boolean = false,
-    val isVisited: Boolean = false,
-    val content: StopContent? = null
-) {
-    val isCompleted: Boolean get() = isVisited
-    val isNextStop: Boolean get() = !isVisited && !isActive
 }
 
 

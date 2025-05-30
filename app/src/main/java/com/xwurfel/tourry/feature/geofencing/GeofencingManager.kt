@@ -11,8 +11,7 @@ import com.google.android.gms.location.Geofence
 import com.google.android.gms.location.GeofencingClient
 import com.google.android.gms.location.GeofencingRequest
 import com.google.android.gms.location.LocationServices
-import com.xwurfel.tourry.feature.geofencing.GeofenceBroadcastReceiver
-import com.xwurfel.tourry.ui.tour.live.LiveTourStop
+import com.xwurfel.tourry.feature.tours.domain.model.LiveTourStop
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow

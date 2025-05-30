@@ -4,6 +4,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.toObject
+import com.xwurfel.tourry.core.domain.error.DomainError
 import com.xwurfel.tourry.core.domain.util.DomainResult
 import com.xwurfel.tourry.core.domain.util.result
 import com.xwurfel.tourry.feature.profile.data.model.FirestoreUser
@@ -13,10 +14,14 @@ import com.xwurfel.tourry.feature.tours.data.model.FirestoreTour
 import com.xwurfel.tourry.feature.tours.data.model.FirestoreTourParticipation
 import com.xwurfel.tourry.feature.tours.domain.model.CreateTourRequest
 import com.xwurfel.tourry.feature.tours.domain.model.LiveParticipant
+import com.xwurfel.tourry.feature.tours.domain.model.LiveTour
+import com.xwurfel.tourry.feature.tours.domain.model.LiveTourStop
+import com.xwurfel.tourry.feature.tours.domain.model.StopContent
 import com.xwurfel.tourry.feature.tours.domain.model.Tour
 import com.xwurfel.tourry.feature.tours.domain.model.TourParticipation
 import com.xwurfel.tourry.feature.tours.domain.repository.TourRepository
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
@@ -487,4 +492,90 @@ class FirebaseTourRepositoryImpl @Inject constructor(
 
             awaitClose { listener.remove() }
         }
+
+    override suspend fun getLiveTour(tourId: String): DomainResult<LiveTour> {
+        return try {
+            delay(500) // Simulate network call
+
+            // Mock data for now - replace with Firebase calls later
+            val mockTour = LiveTour(
+                id = tourId,
+                title = "Amazing City Tour",
+                description = "Discover the hidden gems of our beautiful city",
+                authorId = "author_123",
+                authorName = "Local Guide",
+                stops = listOf(
+                    LiveTourStop(
+                        id = "stop_1",
+                        name = "City Center",
+                        description = "The heart of our beautiful city",
+                        latitude = 48.8566,
+                        longitude = 2.3522,
+                        order = 1,
+                        content = StopContent(
+                            text = "Welcome to the city center!",
+                            imageUrls = emptyList(),
+                            audioUrl = "https://example.com/audio1.mp3"
+                        )
+                    ),
+                    LiveTourStop(
+                        id = "stop_2",
+                        name = "Historic Square",
+                        description = "A place full of history",
+                        latitude = 48.8576,
+                        longitude = 2.3532,
+                        order = 2,
+                        content = StopContent(
+                            text = "This historic square has been here for centuries.",
+                            imageUrls = emptyList(),
+                            audioUrl = "https://example.com/audio2.mp3"
+                        )
+                    )
+                )
+            )
+
+            DomainResult.Success(mockTour)
+        } catch (_: Exception) {
+            DomainResult.Failure(DomainError.SomethingWentWrongError())
+        }
+    }
+
+    override suspend fun startTourSession(tourId: String, userId: String): DomainResult<String> {
+        return try {
+            delay(300)
+            val sessionId = "session_${System.currentTimeMillis()}"
+            DomainResult.Success(sessionId)
+        } catch (_: Exception) {
+            DomainResult.Failure(DomainError.SomethingWentWrongError())
+        }
+    }
+
+    override suspend fun recordStopVisit(
+        sessionId: String,
+        stopId: String,
+        timestamp: Long,
+        userLocation: Pair<Double, Double>
+    ): DomainResult<Unit> {
+        return try {
+            delay(100)
+            // In Firebase: save to tour_sessions/{sessionId}/visits/{stopId}
+            DomainResult.Success(Unit)
+        } catch (_: Exception) {
+            DomainResult.Failure(DomainError.SomethingWentWrongError())
+        }
+    }
+
+    override suspend fun completeTourSession(
+        sessionId: String,
+        completionPercentage: Float,
+        totalDuration: Long
+    ): DomainResult<Unit> {
+        return try {
+            delay(200)
+            // In Firebase: update tour_sessions/{sessionId} with completion data
+            DomainResult.Success(Unit)
+        } catch (_: Exception) {
+            DomainResult.Failure(DomainError.SomethingWentWrongError())
+        }
+    }
 }

@@ -3,6 +3,7 @@ package com.xwurfel.tourry.feature.tours.domain.repository
 import com.xwurfel.tourry.core.domain.util.DomainResult
 import com.xwurfel.tourry.feature.tours.domain.model.CreateTourRequest
 import com.xwurfel.tourry.feature.tours.domain.model.LiveParticipant
+import com.xwurfel.tourry.feature.tours.domain.model.LiveTour
 import com.xwurfel.tourry.feature.tours.domain.model.Tour
 import com.xwurfel.tourry.feature.tours.domain.model.TourParticipation
 import kotlinx.coroutines.flow.Flow
@@ -51,4 +52,19 @@ interface TourRepository {
     ): DomainResult<Unit>
 
     fun observeLiveParticipants(tourId: String): Flow<List<LiveParticipant>>
+
+    suspend fun getLiveTour(tourId: String): DomainResult<LiveTour>
+    suspend fun startTourSession(tourId: String, userId: String): DomainResult<String>
+    suspend fun recordStopVisit(
+        sessionId: String,
+        stopId: String,
+        timestamp: Long,
+        userLocation: Pair<Double, Double>
+    ): DomainResult<Unit>
+
+    suspend fun completeTourSession(
+        sessionId: String,
+        completionPercentage: Float,
+        totalDuration: Long
+    ): DomainResult<Unit>
 }
