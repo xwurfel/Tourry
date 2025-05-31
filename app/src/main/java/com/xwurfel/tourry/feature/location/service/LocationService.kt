@@ -44,10 +44,15 @@ class LocationService : Service() {
     private val serviceScope = CoroutineScope(SupervisorJob())
     private val binder = LocationBinder()
 
-    private val _locationUpdates = MutableSharedFlow<Location>()
+    // SharedFlow with replay=1 to cache the latest location for new collectors
+    private val _locationUpdates = MutableSharedFlow<Location>(
+        replay = 1,
+        extraBufferCapacity = 0
+    )
     val locationUpdates: SharedFlow<Location> = _locationUpdates.asSharedFlow()
 
     private var currentTourId: String? = null
+    private var currentTourTitle: String = "Live Tour"
     private var isTrackingLocation = false
     private var lastKnownLocation: Location? = null
 
@@ -55,8 +60,8 @@ class LocationService : Service() {
         override fun onLocationResult(result: LocationResult) {
             result.lastLocation?.let { location ->
                 lastKnownLocation = location
-                _locationUpdates.tryEmit(location)
-                Timber.d("Location update: ${location.latitude}, ${location.longitude} (accuracy: ${location.accuracy}m)")
+                val emitResult = _locationUpdates.tryEmit(location)
+                Timber.d("Location update: ${location.latitude}, ${location.longitude} (accuracy: ${location.accuracy}m) - Emitted: $emitResult")
             }
         }
     }
@@ -74,13 +79,7 @@ class LocationService : Service() {
             ACTION_START_LOCATION_SERVICE -> {
                 val tourId = intent.getStringExtra(EXTRA_TOUR_ID)
                 val tourTitle = intent.getStringExtra(EXTRA_TOUR_TITLE) ?: "Live Tour"
-
-                if (hasRequiredPermissions()) {
-                    startLocationTracking(tourId, tourTitle)
-                } else {
-                    Timber.e("Location service started without required permissions")
-                    stopSelf()
-                }
+                startLocationTracking(tourId, tourTitle)
             }
 
             ACTION_STOP_LOCATION_SERVICE -> {
@@ -90,24 +89,25 @@ class LocationService : Service() {
         return START_NOT_STICKY
     }
 
-    fun startLocationTracking(tourId: String?, tourTitle: String) {
+    fun startLocationTracking(tourId: String? = null, tourTitle: String = "Live Tour"): Boolean {
         if (isTrackingLocation) {
             Timber.d("Location tracking already active")
-            return
+            return true
         }
 
         if (!hasRequiredPermissions()) {
             Timber.e("Cannot start location tracking: missing permissions")
-            return
+            return false
         }
 
         if (!isLocationEnabled()) {
             Timber.e("Location services are disabled")
-            return
+            return false
         }
 
         try {
             currentTourId = tourId
+            currentTourTitle = tourTitle
             isTrackingLocation = true
 
             val notification = createNotification(tourTitle)
@@ -143,13 +143,16 @@ class LocationService : Service() {
             )
 
             Timber.d("Location tracking started for tour: $tourTitle")
+            return true
 
         } catch (e: SecurityException) {
             Timber.e(e, "SecurityException when starting location tracking")
             stopLocationTracking()
+            return false
         } catch (e: Exception) {
             Timber.e(e, "Exception when starting location tracking")
             stopLocationTracking()
+            return false
         }
     }
 
@@ -176,6 +179,8 @@ class LocationService : Service() {
 
     fun getLastKnownLocation(): Location? = lastKnownLocation
 
+    fun isLocationTracking(): Boolean = isTrackingLocation
+
     private fun hasRequiredPermissions(): Boolean {
         val hasFineLocation = ActivityCompat.checkSelfPermission(
             this,
@@ -195,7 +200,7 @@ class LocationService : Service() {
     }
 
     private fun isLocationEnabled(): Boolean {
-        val locationManager = getSystemService(Context.LOCATION_SERVICE)
+        val locationManager = getSystemService(LOCATION_SERVICE)
                 as android.location.LocationManager
         return locationManager.isProviderEnabled(android.location.LocationManager.GPS_PROVIDER) ||
                 locationManager.isProviderEnabled(android.location.LocationManager.NETWORK_PROVIDER)
@@ -236,7 +241,7 @@ class LocationService : Service() {
         }
 
         val notificationManager =
-            getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.createNotificationChannel(channel)
     }
 

@@ -386,7 +386,9 @@ fun TourDetailScreen(
                 items(uiState.tour.stops) { stop ->
                     StopDetailCard(
                         stop = stop,
-                        modifier = Modifier.padding(horizontal = 16.dp)
+                        modifier = Modifier
+                            .padding(horizontal = 16.dp)
+                            .padding(bottom = 8.dp)
                     )
                 }
             }

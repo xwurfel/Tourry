@@ -1,30 +1,121 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- App Name -->
     <string name="app_name">Tourry</string>
-    <string name="location_tracking_channel_name">Location Tracking</string>
-    <string name="location_tracking_channel_description">Shows when your location is being tracked for a tour</string>
-    <string name="tracking_notification_title">Tracking location</string>
-    <string name="tracking_notification_text">Active tour: %1$s</string>
-    <string name="geofence_channel_name">Tour Group Alerts</string>
-    <string name="geofence_channel_description">Alerts when you leave the tour area</string>
-    <string name="regroup_channel_name">Regroup Requests</string>
-    <string name="regroup_channel_description">Notifications when the guide requests everyone to regroup</string>
-    <string name="geofence_exit_title">You\'ve left the tour area</string>
-    <string name="geofence_exit_text">Please return to the guide to stay with the group</string>
-    <string name="regroup_title">Time to regroup!</string>
-    <string name="regroup_text">The guide of %1$s has requested everyone to regroup</string>
-    <string name="error_no_internet_connection">Sorry, no internet connection!</string>
-    <string name="error_server_failed_to_respond">Sorry, server failded to respond!</string>
 
     <!-- Navigation -->
     <string name="nav_explore">Explore</string>
     <string name="nav_my_tours">My Tours</string>
     <string name="nav_profile">Profile</string>
 
-    <!-- Explore Screen -->
+    <!-- Common Actions -->
     <string name="create_tour">Create Tour</string>
-    <string name="switch_to_list">Switch to List</string>
-    <string name="switch_to_map">Switch to Map</string>
     <string name="search_tours">Search tours…</string>
+    <string name="clear">Clear</string>
+    <string name="switch_to_list">Switch to list</string>
+    <string name="switch_to_map">Switch to map</string>
+    <string name="live_soon">Live soon</string>
+    <string name="free">Free</string>
+
+    <!-- Firebase Authentication Errors -->
+    <string name="auth_sign_in_failed">Sign in failed. Please try again.</string>
+    <string name="auth_account_creation_failed">Account creation failed. Please try again.</string>
+    <string name="auth_invalid_credentials">Invalid email or password. Please check your credentials.</string>
+    <string name="auth_user_disabled">This account has been disabled. Please contact support.</string>
+    <string name="auth_email_already_in_use">This email is already registered. Please use a different email or sign in.</string>
+    <string name="auth_network_error">Network error. Please check your internet connection and try again.</string>
+    <string name="auth_weak_password">Password is too weak. Please choose a stronger password.</string>
+    <string name="auth_invalid_email">Please enter a valid email address.</string>
+    <string name="auth_user_not_found">No account found with this email. Please check your email or create a new account.</string>
+    <string name="auth_wrong_password">Incorrect password. Please try again.</string>
+    <string name="auth_too_many_requests">Too many failed attempts. Please try again later.</string>
+    <string name="auth_google_sign_in_failed">Google sign-in failed. Please try again.</string>
+    <string name="auth_anonymous_sign_in_failed">Anonymous sign-in failed. Please try again.</string>
+
+    <!-- Firebase Firestore Errors -->
+    <string name="firestore_permission_denied">You don\'t have permission to access this data.</string>
+    <string name="firestore_not_found">The requested data was not found.</string>
+    <string name="firestore_already_exists">This data already exists.</string>
+    <string name="firestore_resource_exhausted">Too many requests. Please try again later.</string>
+    <string name="firestore_failed_precondition">Operation failed due to conflicting data.</string>
+    <string name="firestore_aborted">Operation was aborted. Please try again.</string>
+    <string name="firestore_out_of_range">Invalid data range.</string>
+    <string name="firestore_unimplemented">This feature is not yet available.</string>
+    <string name="firestore_internal">An internal error occurred. Please try again.</string>
+    <string name="firestore_unavailable">Service is temporarily unavailable. Please try again later.</string>
+    <string name="firestore_data_loss">Data corruption detected. Please contact support.</string>
+    <string name="firestore_unauthenticated">Please sign in to access this feature.</string>
+    <string name="firestore_deadline_exceeded">Request timed out. Please try again.</string>
+    <string name="firestore_cancelled">Operation was cancelled.</string>
+    <string name="firestore_invalid_argument">Invalid request. Please check your input.</string>
+    <string name="firestore_unknown_error">An unknown error occurred. Please try again.</string>
+    <string name="firestore_offline">You\'re offline. Some features may not be available.</string>
+
+    <!-- Firebase Storage Errors -->
+    <string name="storage_object_not_found">File not found.</string>
+    <string name="storage_bucket_not_found">Storage bucket not found.</string>
+    <string name="storage_project_not_found">Project not found.</string>
+    <string name="storage_quota_exceeded">Storage quota exceeded.</string>
+    <string name="storage_unauthenticated">Please sign in to upload files.</string>
+    <string name="storage_unauthorized">You don\'t have permission to upload files.</string>
+    <string name="storage_retry_limit_exceeded">Upload failed after multiple attempts.</string>
+    <string name="storage_invalid_checksum">File verification failed. Please try again.</string>
+    <string name="storage_canceled">Upload was cancelled.</string>
+    <string name="storage_unknown_error">Upload failed. Please try again.</string>
+    <string name="storage_file_too_large">File is too large. Maximum size is %1$d MB.</string>
+    <string name="storage_invalid_file_type">Invalid file type. Please select a valid file.</string>
+
+    <!-- Firebase Cloud Messaging -->
+    <string name="fcm_permission_required">Notification permission is required to receive tour updates.</string>
+    <string name="fcm_token_failed">Failed to register for notifications.</string>
+
+    <!-- Network Errors -->
+    <string name="error_no_internet_connection">No internet connection. Please check your network settings.</string>
+    <string name="error_server_failed_to_respond">Server is not responding. Please try again later.</string>
+    <string name="error_request_timeout">Request timed out. Please try again.</string>
+    <string name="error_server_error">Server error occurred. Please try again later.</string>
+
+    <!-- Location Services -->
+    <string name="tracking_notification_title">Tour in Progress</string>
+    <string name="tracking_notification_text">Tracking your location for %1$s</string>
+    <string name="location_tracking_channel_name">Location Tracking</string>
+    <string name="location_tracking_channel_description">Notifications for location tracking during tours</string>
+
+    <!-- Geofencing -->
+    <string name="geofence_exit_title">Don\'t forget about your tour!</string>
+    <string name="geofence_exit_text">You\'ve moved away from the tour area. Tap to return.</string>
+    <string name="regroup_title">Time to regroup!</string>
+    <string name="regroup_text">The %1$s tour is gathering. Join your group now!</string>
+    <string name="geofence_channel_name">Location Alerts</string>
+    <string name="geofence_channel_description">Alerts when you arrive at or leave tour stops</string>
+    <string name="regroup_channel_name">Tour Coordination</string>
+    <string name="regroup_channel_description">Notifications for tour group coordination</string>
+
+    <!-- Firebase Service Errors -->
+    <string name="firebase_auth_not_initialized">Authentication service is not available.</string>
+    <string name="firebase_firestore_not_initialized">Database service is not available.</string>
+    <string name="firebase_storage_not_initialized">Storage service is not available.</string>
+    <string name="firebase_analytics_not_initialized">Analytics service is not available.</string>
+    <string name="firebase_messaging_not_initialized">Messaging service is not available.</string>
+
+    <!-- General Firebase Errors -->
+    <string name="firebase_initialization_failed">Failed to initialize Firebase services.</string>
+    <string name="firebase_configuration_error">Firebase configuration error. Please check your setup.</string>
+    <string name="firebase_service_unavailable">Firebase service is temporarily unavailable.</string>
+
+    <!-- Data Sync Errors -->
+    <string name="sync_failed">Failed to sync data. Some information may be outdated.</string>
+    <string name="sync_retry">Retrying data sync…</string>
+    <string name="sync_offline_mode">You\'re in offline mode. Data will sync when you\'re back online.</string>
+
+    <!-- Upload Progress -->
+    <string name="upload_progress">Uploading… %1$d%%</string>
+    <string name="upload_complete">Upload complete</string>
+    <string name="upload_failed">Upload failed</string>
+    <string name="upload_retry">Retry upload</string>
+
+    <!-- Notification Icon -->
+    <string name="ic_notification">Notification</string>
 
     <!-- Tour Creation -->
     <string name="tour_creation_title">Create New Tour</string>
@@ -45,21 +136,9 @@
     <string name="cancel">Cancel</string>
     <string name="edit">Edit</string>
     <string name="join">Join</string>
-    <string name="free">Free</string>
-    <string name="live_soon">LIVE soon</string>
-    <string name="clear">clear</string>
     <string name="edit_tour_title">Edit tour</string>
     <string name="update_tour">Update tour</string>
 
     <!-- Auth related strings -->
-    <string name="auth_google_sign_in_failed">Google sign-in failed</string>
-    <string name="auth_sign_in_failed">Sign-in failed</string>
-    <string name="auth_account_creation_failed">Account creation failed</string>
     <string name="auth_password_reset_failed">Password reset failed</string>
-    <string name="auth_network_error">Network error. Please check your connection.</string>
-    <string name="auth_invalid_credentials">Invalid email or password</string>
-    <string name="auth_user_disabled">This account has been disabled</string>
-    <string name="auth_weak_password">Password is too weak</string>
-    <string name="auth_email_already_in_use">Email is already registered</string>
-    <string name="auth_invalid_email">Invalid email address</string>
 </resources>

@@ -19,6 +19,7 @@ import com.xwurfel.tourry.feature.tours.domain.usecase.RecordStopVisitUseCase
 import com.xwurfel.tourry.feature.tours.domain.usecase.StartTourSessionUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
@@ -49,14 +50,56 @@ class LiveTourViewModel @Inject constructor(
             loadTourData(),
             observeLocationUpdates(),
             observeGeofenceEvents(),
-            observeAudioPlayerState()
+            observeAudioPlayerState(),
+            observeServiceConnection()
         )
     }
 
     override fun mapIntents(intent: LiveTourIntent): Flow<LiveTourPartialState> = flow {
         when (intent) {
             LiveTourIntent.StartLocationTracking -> {
-                emit(startLocationTracking())
+                try {
+                    if (!locationManager.hasLocationPermission()) {
+                        emit(LiveTourPartialState.LocationPermissionDenied)
+                        return@flow
+                    }
+
+                    emit(LiveTourPartialState.Loading)
+
+                    val sessionResult = startTourSessionUseCase(tourId, getCurrentUserId())
+                    sessionResult.onSuccess { sessionId ->
+                        currentSessionId = sessionId
+                        tourStartTime = System.currentTimeMillis()
+                    }.onFailure { error ->
+                        emit(LiveTourPartialState.Error("Failed to start tour session: ${error.msg}"))
+                        return@flow
+                    }
+
+                    val result =
+                        locationManager.startLocationUpdates(
+                            tourId,
+                            uiStateSnapshot.value.tourTitle
+                        )
+
+                    if (result.isSuccess) {
+                        setupGeofencing()
+                        tourAnalytics.startTourSession(
+                            tourId,
+                            uiStateSnapshot.value.tourTitle,
+                            false
+                        )
+                        LiveTourPartialState.LocationTrackingStarted
+                    } else {
+                        val error = result.exceptionOrNull()
+                        Timber.e(error, "Failed to start location tracking")
+                        LiveTourPartialState.LocationServiceError(
+                            error?.message ?: "Failed to start location tracking"
+                        )
+                    }
+                } catch (e: Exception) {
+                    Timber.e(e, "Failed to start location tracking")
+                    LiveTourPartialState.LocationServiceError("Failed to start location tracking")
+                }
             }
 
             LiveTourIntent.PauseTour -> {
@@ -219,33 +262,6 @@ class LiveTourViewModel @Inject constructor(
         }
     }
 
-    // Private helper methods that return partial states instead of emitting
-    private suspend fun startLocationTracking(): LiveTourPartialState {
-        return try {
-            if (!locationManager.hasLocationPermission()) {
-                return LiveTourPartialState.LocationPermissionDenied
-            }
-
-            // Start tour session
-            val sessionResult = startTourSessionUseCase(tourId, getCurrentUserId())
-            sessionResult.onSuccess { sessionId ->
-                currentSessionId = sessionId
-                tourStartTime = System.currentTimeMillis()
-            }.onFailure { error ->
-                return LiveTourPartialState.Error("Failed to start tour session: ${error.msg}")
-            }
-
-            locationManager.startLocationUpdates()
-            setupGeofencing()
-            tourAnalytics.startTourSession(tourId, "", false)
-
-            LiveTourPartialState.LocationTrackingStarted
-        } catch (e: Exception) {
-            Timber.e(e, "Failed to start location tracking")
-            LiveTourPartialState.LocationServiceError("Failed to start location tracking")
-        }
-    }
-
     private suspend fun completeTour(): LiveTourPartialState {
         return try {
             val state = uiStateSnapshot.value
@@ -402,15 +418,36 @@ class LiveTourViewModel @Inject constructor(
     }
 
     private fun observeLocationUpdates(): Flow<LiveTourPartialState> {
-        return locationManager.locationUpdates.map { location ->
-            LiveTourPartialState.LocationUpdated(
-                UserLocation(
-                    latitude = location.latitude,
-                    longitude = location.longitude,
-                    accuracy = location.accuracy,
-                    timestamp = location.time
+        return locationManager.locationUpdates
+            .map { location ->
+                Timber.d(
+                    "LiveTourViewModel received location update: " +
+                            "${location.latitude}, ${location.longitude}"
                 )
-            )
+                LiveTourPartialState.LocationUpdated(
+                    UserLocation(
+                        latitude = location.latitude,
+                        longitude = location.longitude,
+                        accuracy = location.accuracy,
+                        timestamp = location.time
+                    )
+                ) as LiveTourPartialState
+            }
+            .catch { error ->
+                Timber.e(error, "Error in location updates flow")
+                emit(
+                    LiveTourPartialState.LocationServiceError(
+                        "Location updates failed: ${error.message}"
+                    )
+                )
+            }
+    }
+
+    private fun observeServiceConnection(): Flow<LiveTourPartialState> = flow {
+        locationManager.isServiceConnected.collect { isConnected ->
+            if (!isConnected && uiStateSnapshot.value.tourStatus == TourStatus.ACTIVE) {
+                emit(LiveTourPartialState.LocationServiceError("Lost connection to location service"))
+            }
         }
     }
 

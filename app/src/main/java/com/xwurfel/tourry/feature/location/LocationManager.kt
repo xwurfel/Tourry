@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.filterNotNull
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -30,24 +31,32 @@ class LocationManager @Inject constructor(
     private val _isTracking = MutableStateFlow(false)
     val isTracking = _isTracking.asStateFlow()
 
+    // Expose service connection state
+    private val _isServiceConnected = MutableStateFlow(false)
+    val isServiceConnected = _isServiceConnected.asStateFlow()
+
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
             val binder = service as LocationService.LocationBinder
             locationService = binder.getService()
             isServiceBound = true
-            Timber.d("LocationService connected")
+            _isServiceConnected.value = true
+            _isTracking.value = locationService?.isLocationTracking() ?: false
+            Timber.d("LocationService connected - tracking: ${_isTracking.value}")
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
             locationService = null
             isServiceBound = false
+            _isServiceConnected.value = false
             _isTracking.value = false
             Timber.d("LocationService disconnected")
         }
     }
 
     /**
-     * Flow of location updates from the LocationService
+     * Flow of location updates from the LocationService.
+     * This flow will be empty until the service is connected and location tracking is started.
      */
     val locationUpdates: Flow<Location> = callbackFlow {
         if (!hasLocationPermission()) {
@@ -55,54 +64,76 @@ class LocationManager @Inject constructor(
             return@callbackFlow
         }
 
-        // Bind to location service if not already bound
+        // Ensure service is bound
         if (!isServiceBound) {
             bindToLocationService()
         }
 
-        // Wait for service connection and start collecting location updates
-        val locationService = waitForServiceConnection()
-        if (locationService != null) {
-            locationService.locationUpdates.collect { location ->
-                trySend(location)
+        // Wait for service connection
+        _isServiceConnected.filterNotNull().collect { isConnected ->
+            if (isConnected && locationService != null) {
+                Timber.d("Service connected, starting to collect location updates")
+
+                // Collect from the service's location updates flow
+                locationService!!.locationUpdates.collect { location ->
+                    Timber.d("LocationManager received location: ${location.latitude}, ${location.longitude}")
+                    trySend(location)
+                }
             }
-        } else {
-            close(IllegalStateException("Failed to connect to LocationService"))
         }
 
         awaitClose {
-            if (isServiceBound) {
-                context.unbindService(serviceConnection)
-                isServiceBound = false
-            }
+            // Don't unbind here as the service might be used by other components
+            Timber.d("LocationManager location updates flow closed")
         }
     }
 
     /**
-     * Start location updates with proper error handling
+     * Start location updates by starting the LocationService
      */
-    suspend fun startLocationUpdates() {
+    suspend fun startLocationUpdates(
+        tourId: String? = null,
+        tourTitle: String = "Live Tour"
+    ): Result<Unit> {
         try {
             if (!hasLocationPermission()) {
-                throw SecurityException("Location permission not granted")
+                return Result.failure(SecurityException("Location permission not granted"))
             }
 
+            // Start the service using intent to ensure it runs in foreground
+            val intent = LocationService.getStartIntent(context, tourId ?: "", tourTitle)
+            context.startForegroundService(intent)
+
+            // Also bind to the service to get access to its methods and flows
             if (!isServiceBound) {
                 bindToLocationService()
             }
 
-            val service = waitForServiceConnection()
-            if (service != null) {
-                service.startLocationTracking(null, "Live Tour")
-                _isTracking.value = true
-                Timber.d("Location tracking started")
-            } else {
-                throw IllegalStateException("Failed to connect to LocationService")
+            // Wait a bit for service to start up
+            var attempts = 0
+            while (!isServiceBound && attempts < 20) { // 2 seconds max wait
+                kotlinx.coroutines.delay(100)
+                attempts++
             }
+
+            val service = locationService
+            if (service != null) {
+                val startResult = service.startLocationTracking(tourId, tourTitle)
+                if (startResult) {
+                    _isTracking.value = true
+                    Timber.d("Location tracking started successfully")
+                    return Result.success(Unit)
+                } else {
+                    return Result.failure(Exception("Failed to start location tracking in service"))
+                }
+            } else {
+                return Result.failure(Exception("Could not connect to LocationService"))
+            }
+
         } catch (e: Exception) {
             Timber.e(e, "Failed to start location updates")
             _isTracking.value = false
-            throw e
+            return Result.failure(e)
         }
     }
 
@@ -111,13 +142,12 @@ class LocationManager @Inject constructor(
      */
     fun stopLocationUpdates() {
         try {
+            // Stop the service
+            val intent = LocationService.getStopIntent(context)
+            context.startService(intent)
+
             locationService?.stopLocationTracking()
             _isTracking.value = false
-
-            if (isServiceBound) {
-                context.unbindService(serviceConnection)
-                isServiceBound = false
-            }
 
             Timber.d("Location tracking stopped")
         } catch (e: Exception) {
@@ -156,19 +186,31 @@ class LocationManager @Inject constructor(
         return locationService?.getLastKnownLocation()
     }
 
+    /**
+     * Bind to the LocationService
+     */
     private fun bindToLocationService() {
+        if (isServiceBound) return
+
         val intent = Intent(context, LocationService::class.java)
-        context.bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
+        val bindResult = context.bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
+        Timber.d("Attempting to bind to LocationService: $bindResult")
     }
 
-    private suspend fun waitForServiceConnection(): LocationService? {
-        // Wait for service connection with timeout
-        var attempts = 0
-        while (!isServiceBound && attempts < 10) {
-            kotlinx.coroutines.delay(100)
-            attempts++
+    /**
+     * Unbind from the LocationService
+     */
+    fun unbindFromLocationService() {
+        if (isServiceBound) {
+            try {
+                context.unbindService(serviceConnection)
+                isServiceBound = false
+                _isServiceConnected.value = false
+                Timber.d("Unbound from LocationService")
+            } catch (e: Exception) {
+                Timber.e(e, "Error unbinding from LocationService")
+            }
         }
-        return locationService
     }
 
     /**
@@ -179,7 +221,7 @@ class LocationManager @Inject constructor(
         lat2: Double, lon2: Double
     ): Double {
         val results = FloatArray(1)
-        android.location.Location.distanceBetween(lat1, lon1, lat2, lon2, results)
+        Location.distanceBetween(lat1, lon1, lat2, lon2, results)
         return results[0].toDouble()
     }
 
