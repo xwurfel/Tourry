@@ -100,15 +100,6 @@ class AuthViewModel @Inject constructor(
                     }
             }
 
-            AuthIntent.ContinueAsGuest -> {
-                emit(AuthPartialState.Loading)
-                delay(500)
-                val userId = "guest_${System.currentTimeMillis()}"
-                mockDataManager.signIn(userId)
-                emit(AuthSuccess(userId, "Guest User"))
-                publishEvent(AuthEvent.NavigateToMain)
-            }
-
             AuthIntent.ClearError -> {
                 emit(AuthPartialState.ErrorCleared)
             }
@@ -190,7 +181,6 @@ sealed interface AuthIntent {
     data class SignInWithEmail(val email: String, val password: String) : AuthIntent
     data class CreateAccount(val email: String, val password: String, val name: String) : AuthIntent
     data class SendPasswordReset(val email: String) : AuthIntent
-    object ContinueAsGuest : AuthIntent
     object ClearError : AuthIntent
 }
 

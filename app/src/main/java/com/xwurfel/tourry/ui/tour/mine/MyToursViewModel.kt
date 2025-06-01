@@ -1,16 +1,34 @@
 package com.xwurfel.tourry.ui.tour.mine
 
+import com.xwurfel.tourry.core.di.IoDispatcher
+import com.xwurfel.tourry.core.domain.util.getOrNull
+import com.xwurfel.tourry.core.domain.util.onFailure
+import com.xwurfel.tourry.core.domain.util.onSuccess
 import com.xwurfel.tourry.core.ui.MviViewModel
-import com.xwurfel.tourry.feature.mock.MockDataManager
+import com.xwurfel.tourry.feature.profile.domain.usecase.GetCurrentUserIdUseCase
+import com.xwurfel.tourry.feature.tours.domain.repository.TourRepository
+import com.xwurfel.tourry.feature.tours.domain.usecase.GetTourByIdUseCase
+import com.xwurfel.tourry.feature.tours.domain.usecase.ObserveToursByAuthorUseCase
+import com.xwurfel.tourry.feature.tours.domain.usecase.ObserveUserParticipationsUseCase
+import com.xwurfel.tourry.ui.tour.mine.mapper.MyTourMapper.toMyTour
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 @HiltViewModel
 class MyToursViewModel @Inject constructor(
-    private val mockDataManager: MockDataManager
+    private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
+    private val observeUserParticipationsUseCase: ObserveUserParticipationsUseCase,
+    private val observeToursByAuthorUseCase: ObserveToursByAuthorUseCase,
+    private val getTourByIdUseCase: GetTourByIdUseCase,
+    private val tourRepository: TourRepository,
+    @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
 ) : MviViewModel<MyToursUiState, MyToursPartialState, MyToursEvent, MyToursIntent>(
     initialState = MyToursUiState()
 ) {
@@ -41,13 +59,14 @@ class MyToursViewModel @Inject constructor(
 
             is MyToursIntent.CancelTour -> {
                 emit(MyToursPartialState.Loading)
-                try {
-                    // TODO: Implement actual cancellation logic in MockDataManager
-                    kotlinx.coroutines.delay(500) // Simulate API call
-                    emit(MyToursPartialState.TourCancelled(intent.tourId))
-                } catch (_: Exception) {
-                    emit(MyToursPartialState.Error("Failed to cancel tour"))
-                }
+
+                tourRepository.deleteTour(intent.tourId)
+                    .onSuccess {
+                        emit(MyToursPartialState.TourCancelled(intent.tourId))
+                    }
+                    .onFailure { error ->
+                        emit(MyToursPartialState.Error("Failed to cancel tour: ${error.msg}"))
+                    }
             }
 
             MyToursIntent.RefreshTours -> {
@@ -58,7 +77,8 @@ class MyToursViewModel @Inject constructor(
     }
 
     override fun reduceUiState(
-        previousState: MyToursUiState, partialState: MyToursPartialState
+        previousState: MyToursUiState,
+        partialState: MyToursPartialState
     ): MyToursUiState {
         return when (partialState) {
             is MyToursPartialState.Loading -> previousState.copy(isLoading = true, error = null)
@@ -78,12 +98,14 @@ class MyToursViewModel @Inject constructor(
                 val updatedCreatedTours =
                     previousState.createdTours.filterNot { it.id == partialState.tourId }
                 previousState.copy(
-                    createdTours = updatedCreatedTours, isLoading = false
+                    createdTours = updatedCreatedTours,
+                    isLoading = false
                 )
             }
 
             is MyToursPartialState.Error -> previousState.copy(
-                isLoading = false, error = partialState.message
+                isLoading = false,
+                error = partialState.message
             )
         }
     }
@@ -91,15 +113,49 @@ class MyToursViewModel @Inject constructor(
     private fun loadMyTours(): Flow<MyToursPartialState> = flow {
         emit(MyToursPartialState.Loading)
 
-        // Combine joined tours and created tours
-        combine(
-            mockDataManager.joinedTourIds, mockDataManager.createdTours
-        ) { joinedIds, createdTours ->
-            val joinedTours = mockDataManager.getJoinedTours()
-            MyToursPartialState.ToursLoaded(joinedTours, createdTours)
-        }.collect { partialState ->
-            emit(partialState)
-        }
+        getCurrentUserIdUseCase()
+            .filterNotNull()
+            .collect { userId ->
+                // Combine joined tours and created tours
+                combine(
+                    loadJoinedTours(userId),
+                    loadCreatedTours(userId)
+                ) { joinedTours, createdTours ->
+                    MyToursPartialState.ToursLoaded(joinedTours, createdTours)
+                }.collect { partialState ->
+                    emit(partialState)
+                }
+            }
+    }
+
+    private fun loadJoinedTours(userId: String): Flow<List<MyTour>> {
+        return observeUserParticipationsUseCase(userId)
+            .map { participations ->
+                participations.mapNotNull { participation ->
+                    try {
+                        val tourResult = runCatching {
+                            withContext(ioDispatcher) {
+                                getTourByIdUseCase(participation.tourId)
+                            }
+                        }
+
+                        tourResult.getOrNull()?.getOrNull()?.let { tour ->
+                            participation.toMyTour(tour)
+                        }
+                    } catch (_: Exception) {
+                        null
+                    }
+                }
+            }
+    }
+
+    private fun loadCreatedTours(userId: String): Flow<List<MyTour>> {
+        return observeToursByAuthorUseCase(userId)
+            .map { tours ->
+                tours.map { tour ->
+                    tour.toMyTour(rating = tour.rating)
+                }
+            }
     }
 }
 

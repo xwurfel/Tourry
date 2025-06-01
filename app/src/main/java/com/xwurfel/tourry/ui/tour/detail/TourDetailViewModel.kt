@@ -1,18 +1,29 @@
 package com.xwurfel.tourry.ui.tour.detail
 
 import androidx.lifecycle.SavedStateHandle
+import com.xwurfel.tourry.core.domain.util.onFailure
+import com.xwurfel.tourry.core.domain.util.onSuccess
 import com.xwurfel.tourry.core.ui.MviViewModel
 import com.xwurfel.tourry.feature.analytics.TourAnalytics
-import com.xwurfel.tourry.feature.mock.MockDataManager
+import com.xwurfel.tourry.feature.profile.domain.usecase.GetCurrentUserIdUseCase
+import com.xwurfel.tourry.feature.tours.domain.usecase.GetTourByIdUseCase
+import com.xwurfel.tourry.feature.tours.domain.usecase.JoinTourUseCase
+import com.xwurfel.tourry.feature.tours.domain.usecase.ObserveUserParticipationsUseCase
+import com.xwurfel.tourry.ui.tour.detail.mapper.TourDetailMapper.toTourDetail
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 
 @HiltViewModel
 class TourDetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
-    private val mockDataManager: MockDataManager,
+    private val getTourByIdUseCase: GetTourByIdUseCase,
+    private val joinTourUseCase: JoinTourUseCase,
+    private val observeUserParticipationsUseCase: ObserveUserParticipationsUseCase,
+    private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
     private val tourAnalytics: TourAnalytics,
 ) : MviViewModel<TourDetailUiState, TourDetailPartialState, TourDetailEvent, TourDetailIntent>(
     initialState = TourDetailUiState()
@@ -41,10 +52,8 @@ class TourDetailViewModel @Inject constructor(
                     mapOf("tour_id" to tourId)
                 )
 
-                try {
-                    val success = mockDataManager.joinTour(tourId)
-                    if (success) {
-                        // Track successful join
+                joinTourUseCase(tourId)
+                    .onSuccess {
                         val tour = uiStateSnapshot.value.tour
                         tourAnalytics.trackEvent(
                             "tour_joined",
@@ -62,23 +71,20 @@ class TourDetailViewModel @Inject constructor(
                         } else {
                             publishEvent(TourDetailEvent.NavigateToBooking)
                         }
-                    } else {
-                        emit(TourDetailPartialState.Error("Failed to join tour"))
                     }
-                } catch (e: Exception) {
-                    emit(TourDetailPartialState.Error("Failed to join tour: ${e.message}"))
-                }
+                    .onFailure { error ->
+                        emit(TourDetailPartialState.Error("Failed to join tour: ${error.msg}"))
+                    }
             }
 
             TourDetailIntent.StartTour -> {
-                // Track tour start
                 tourAnalytics.trackEvent(
                     "tour_started_from_detail",
                     mapOf("tour_id" to tourId)
                 )
 
-                val joinedIds = mockDataManager.joinedTourIds.value
-                if (tourId in joinedIds) {
+                val tour = uiStateSnapshot.value.tour
+                if (tour?.isJoined == true) {
                     publishEvent(TourDetailEvent.NavigateToLiveTour)
                 } else {
                     emit(TourDetailPartialState.Error("You must join the tour first"))
@@ -86,7 +92,6 @@ class TourDetailViewModel @Inject constructor(
             }
 
             TourDetailIntent.ShareTour -> {
-                // Track share
                 tourAnalytics.trackEvent(
                     "tour_shared",
                     mapOf("tour_id" to tourId, "share_source" to "detail_page")
@@ -96,7 +101,15 @@ class TourDetailViewModel @Inject constructor(
 
             TourDetailIntent.RefreshTour -> {
                 emit(TourDetailPartialState.Loading)
-                // Refresh will be handled by loadTourDetail
+                // Reload tour data
+                getTourByIdUseCase(tourId)
+                    .onSuccess { tour ->
+                        val isJoined = uiStateSnapshot.value.tour?.isJoined ?: false
+                        emit(TourDetailPartialState.TourLoaded(tour.toTourDetail(isJoined = isJoined)))
+                    }
+                    .onFailure { error ->
+                        emit(TourDetailPartialState.Error("Failed to refresh tour: ${error.msg}"))
+                    }
             }
         }
     }
@@ -146,24 +159,37 @@ class TourDetailViewModel @Inject constructor(
 
     private fun loadTourDetail(): Flow<TourDetailPartialState> = flow {
         emit(TourDetailPartialState.Loading)
-        try {
-            // Get tour detail from MockDataManager
-            val tourDetail = mockDataManager.getTourDetail(tourId)
-            if (tourDetail != null) {
-                emit(TourDetailPartialState.TourLoaded(tourDetail))
-            } else {
-                emit(TourDetailPartialState.Error("Tour not found"))
+
+        getTourByIdUseCase(tourId)
+            .onSuccess { tour ->
+                val isJoined = checkIfUserJoinedTour()
+                emit(TourDetailPartialState.TourLoaded(tour.toTourDetail(isJoined = isJoined)))
             }
-        } catch (e: Exception) {
-            emit(TourDetailPartialState.Error("Failed to load tour: ${e.message}"))
-        }
+            .onFailure { error ->
+                emit(TourDetailPartialState.Error("Failed to load tour: ${error.msg}"))
+            }
     }
 
     private fun observeJoinedStatus(): Flow<TourDetailPartialState> = flow {
-        mockDataManager.joinedTourIds.collect { joinedIds ->
-            val isJoined = tourId in joinedIds
-            emit(TourDetailPartialState.JoinedStatusUpdated(isJoined))
-        }
+        getCurrentUserIdUseCase()
+            .filterNotNull()
+            .collect { userId ->
+                observeUserParticipationsUseCase(userId)
+                    .map { participations ->
+                        participations.any {
+                            it.tourId == tourId &&
+                                    it.status == com.xwurfel.tourry.feature.tours.domain.model.ParticipationStatus.JOINED
+                        }
+                    }
+                    .collect { isJoined ->
+                        emit(TourDetailPartialState.JoinedStatusUpdated(isJoined))
+                    }
+            }
+    }
+
+    private suspend fun checkIfUserJoinedTour(): Boolean {
+        // This is a simple check that will be updated by the observeJoinedStatus flow
+        return false
     }
 }
 

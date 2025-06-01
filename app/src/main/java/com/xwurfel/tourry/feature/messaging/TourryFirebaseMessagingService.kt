@@ -22,6 +22,7 @@ class TourryFirebaseMessagingService : FirebaseMessagingService() {
 
     override fun onCreate() {
         super.onCreate()
+        fcmTokenManager.initialize()
         createNotificationChannels()
     }
 

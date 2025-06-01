@@ -62,7 +62,6 @@ fun AuthRoute(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = LocalSnackbarHostState.current
 
-    // Handle Google Sign-In
     GoogleSignInHandler(
         shouldLaunch = uiState.shouldLaunchGoogleSignIn,
         onResult = { intent ->
@@ -73,7 +72,6 @@ fun AuthRoute(
         }
     )
 
-    // Handle events
     viewModel.event.collectWithLifecycle { event ->
         when (event) {
             AuthEvent.NavigateToMain -> onAuthSuccess()
@@ -137,7 +135,7 @@ fun AuthScreen(
                 ) {
                     // App logo/icon
                     Image(
-                        painter = painterResource(R.drawable.tour_icon),
+                        painter = painterResource(R.drawable.ic_splash_logo),
                         contentDescription = "Tourry Logo",
                         modifier = Modifier
                             .size(120.dp)
@@ -173,7 +171,6 @@ fun AuthScreen(
                             onGoogleSignIn = { onIntent(AuthIntent.SignInWithGoogle) },
                             onSwitchToSignUp = { authMode = AuthMode.SIGN_UP },
                             onForgotPassword = { showPasswordReset = true },
-                            onContinueAsGuest = { onIntent(AuthIntent.ContinueAsGuest) }
                         )
 
                         AuthMode.SIGN_UP -> SignUpForm(
@@ -207,7 +204,6 @@ fun SignInForm(
     onGoogleSignIn: () -> Unit,
     onSwitchToSignUp: () -> Unit,
     onForgotPassword: () -> Unit,
-    onContinueAsGuest: () -> Unit
 ) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -277,11 +273,6 @@ fun SignInForm(
         // Switch to Sign Up
         TextButton(onClick = onSwitchToSignUp) {
             Text("Don't have an account? Sign Up")
-        }
-
-        // Continue as Guest
-        TextButton(onClick = onContinueAsGuest) {
-            Text("Continue as Guest")
         }
     }
 }

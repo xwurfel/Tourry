@@ -29,6 +29,15 @@ fun TourryNavHost(
         startDestination = startDestination,
         modifier = modifier,
     ) {
+        // Authentication screen
+        composable(authRoute) {
+            AuthRoute(
+                onAuthSuccess = {
+                    appState.navigateToAuthenticatedArea()
+                }
+            )
+        }
+
         // Bottom Navigation Destinations
         composable(exploreRoute) {
             ExploreRoute(
@@ -70,19 +79,7 @@ fun TourryNavHost(
                     }
                 },
                 onNavigateToSignIn = {
-                    navController.navigate(authRoute)
-                }
-            )
-        }
-
-        composable(authRoute) {
-            AuthRoute(
-                onAuthSuccess = {
-                    if (!navController.popBackStack()) {
-                        navController.navigate(exploreRoute) {
-                            popUpTo(authRoute) { inclusive = true }
-                        }
-                    }
+                    appState.navigateToAuthentication()
                 }
             )
         }

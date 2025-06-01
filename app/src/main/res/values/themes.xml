@@ -2,4 +2,20 @@
 <resources>
 
     <style name="Theme.Tourry" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <style name="Theme.Tourry.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/splash_gradient_start</item>
+
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash_logo</item>
+
+        <item name="windowSplashScreenAnimationDuration">1000</item>
+
+        <!-- Status bar color -->
+        <item name="android:statusBarColor">@color/splash_status_bar</item>
+        <item name="android:windowLightStatusBar">false</item>
+
+        <item name="android:navigationBarColor">@color/splash_gradient_end</item>
+
+        <item name="postSplashScreenTheme">@style/Theme.Tourry</item>
+    </style>
 </resources>

@@ -7,4 +7,13 @@
     <color name="teal_700">#FF018786</color>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+    <!-- Splash Screen Colors -->
+    <color name="splash_gradient_start">#FF1D6B50</color>
+    <color name="splash_gradient_end">#FF0F3D2C</color>
+    <color name="splash_logo_background">#FFFFFFFF</color>
+    <color name="splash_logo_foreground">#FF1D6B50</color>
+    <color name="splash_logo_accent">#FF8BD5B5</color>
+
+    <!-- Splash Screen Status Bar -->
+    <color name="splash_status_bar">#FF0F3D2C</color>
 </resources>

@@ -1,17 +1,30 @@
 package com.xwurfel.tourry.ui.explore
 
+import com.xwurfel.tourry.core.domain.util.onFailure
+import com.xwurfel.tourry.core.domain.util.onSuccess
 import com.xwurfel.tourry.core.ui.MviViewModel
 import com.xwurfel.tourry.feature.analytics.TourAnalytics
-import com.xwurfel.tourry.feature.mock.MockDataManager
+import com.xwurfel.tourry.feature.profile.domain.usecase.GetCurrentUserIdUseCase
+import com.xwurfel.tourry.feature.tours.domain.usecase.JoinTourUseCase
+import com.xwurfel.tourry.feature.tours.domain.usecase.ObserveAvailableToursUseCase
+import com.xwurfel.tourry.feature.tours.domain.usecase.ObserveUserParticipationsUseCase
+import com.xwurfel.tourry.feature.tours.domain.usecase.SearchToursUseCase
+import com.xwurfel.tourry.ui.explore.mapper.TourPreviewMapper.toTourPreviews
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.FlowCollector
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 
 @HiltViewModel
 class ExploreViewModel @Inject constructor(
-    private val mockDataManager: MockDataManager,
+    private val observeAvailableToursUseCase: ObserveAvailableToursUseCase,
+    private val searchToursUseCase: SearchToursUseCase,
+    private val joinTourUseCase: JoinTourUseCase,
+    private val observeUserParticipationsUseCase: ObserveUserParticipationsUseCase,
+    private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
     private val tourAnalytics: TourAnalytics
 ) : MviViewModel<ExploreUiState, ExplorePartialState, ExploreEvent, ExploreIntent>(
     initialState = ExploreUiState()
@@ -28,19 +41,29 @@ class ExploreViewModel @Inject constructor(
         when (intent) {
             is ExploreIntent.SearchQueryChanged -> {
                 emit(ExplorePartialState.SearchQueryChanged(intent.query))
+
                 if (intent.query.isNotBlank()) {
-                    val currentTours = uiStateSnapshot.value.tours
-                    val filteredTours = currentTours.filter { tour ->
-                        tour.title.contains(intent.query, ignoreCase = true) ||
-                                tour.description.contains(intent.query, ignoreCase = true)
-                    }
-
-                    tourAnalytics.trackSearch(
+                    // Perform search using Firebase
+                    searchToursUseCase(
                         query = intent.query,
-                        resultsCount = filteredTours.size
-                    )
+                        themes = uiStateSnapshot.value.activeFilters.themes,
+                        maxPrice = uiStateSnapshot.value.activeFilters.maxPrice,
+                        maxDistance = uiStateSnapshot.value.activeFilters.maxDistance
+                    ).onSuccess { tours ->
+                        val tourPreviews = tours.toTourPreviews()
 
-                    emit(ExplorePartialState.ToursFiltered(filteredTours))
+                        tourAnalytics.trackSearch(
+                            query = intent.query,
+                            resultsCount = tourPreviews.size
+                        )
+
+                        emit(ExplorePartialState.ToursFiltered(tourPreviews))
+                    }.onFailure { error ->
+                        emit(ExplorePartialState.Error("Search failed: ${error.msg}"))
+                    }
+                } else {
+                    // Reset to all tours when search is cleared
+                    emit(ExplorePartialState.ToursFiltered(uiStateSnapshot.value.allTours))
                 }
             }
 
@@ -52,21 +75,20 @@ class ExploreViewModel @Inject constructor(
                     intent.filters.maxDuration != null -> "duration"
                     intent.filters.maxPrice != null -> "price"
                     intent.filters.maxDistance != null -> "distance"
+                    intent.filters.themes.isNotEmpty() -> "theme"
                     else -> null
                 }
 
                 if (filterUsed != null) {
-                    val currentTours = uiStateSnapshot.value.allTours
                     tourAnalytics.trackSearch(
                         query = uiStateSnapshot.value.searchQuery,
-                        resultsCount = currentTours.size,
+                        resultsCount = 0, // Will be updated after filtering
                         filterUsed = filterUsed
                     )
                 }
 
                 applyFilters(intent.filters)
             }
-
 
             is ExploreIntent.TourClicked -> {
                 tourAnalytics.trackEvent(
@@ -77,7 +99,6 @@ class ExploreViewModel @Inject constructor(
             }
 
             is ExploreIntent.CreateTourClicked -> {
-                // Track creation intent
                 tourAnalytics.trackEvent(
                     "tour_creation_started",
                     mapOf("source" to "explore_fab")
@@ -91,15 +112,14 @@ class ExploreViewModel @Inject constructor(
 
             is ExploreIntent.RefreshTours -> {
                 emit(ExplorePartialState.Loading)
-                // Reload tours from mock data manager
-                loadToursFromSource()
+                // Tours will be refreshed through the continuous flow
             }
 
             is ExploreIntent.JoinTour -> {
                 emit(ExplorePartialState.JoiningTour(intent.tourId))
-                try {
-                    val success = mockDataManager.joinTour(intent.tourId)
-                    if (success) {
+
+                joinTourUseCase(intent.tourId)
+                    .onSuccess {
                         tourAnalytics.trackEvent(
                             "tour_joined_quick",
                             mapOf(
@@ -108,12 +128,10 @@ class ExploreViewModel @Inject constructor(
                             )
                         )
                         emit(ExplorePartialState.TourJoined(intent.tourId))
-                    } else {
-                        emit(ExplorePartialState.Error("Failed to join tour"))
                     }
-                } catch (e: Exception) {
-                    emit(ExplorePartialState.Error("Failed to join tour: ${e.message}"))
-                }
+                    .onFailure { error ->
+                        emit(ExplorePartialState.Error("Failed to join tour: ${error.msg}"))
+                    }
             }
         }
     }
@@ -127,7 +145,7 @@ class ExploreViewModel @Inject constructor(
 
             is ExplorePartialState.ToursLoaded -> previousState.copy(
                 tours = partialState.tours,
-                allTours = partialState.tours, // Keep original list for filtering
+                allTours = partialState.tours,
                 isLoading = false,
                 error = null
             )
@@ -171,59 +189,75 @@ class ExploreViewModel @Inject constructor(
 
     private fun loadTours(): Flow<ExplorePartialState> = flow {
         emit(ExplorePartialState.Loading)
-        loadToursFromSource()
-    }
 
-    private suspend fun FlowCollector<ExplorePartialState>.loadToursFromSource() {
-        mockDataManager.availableTours.collect { tours ->
-            emit(ExplorePartialState.ToursLoaded(tours))
+        observeAvailableToursUseCase().collect { tours ->
+            val tourPreviews = tours.toTourPreviews()
+            emit(ExplorePartialState.ToursLoaded(tourPreviews))
         }
     }
 
     private fun observeJoinedTours(): Flow<ExplorePartialState> = flow {
-        mockDataManager.joinedTourIds.collect { joinedIds ->
-            emit(ExplorePartialState.JoinedToursUpdated(joinedIds))
-        }
+        getCurrentUserIdUseCase()
+            .filterNotNull()
+            .collect { userId ->
+                observeUserParticipationsUseCase(userId)
+                    .map { participations ->
+                        participations
+                            .filter { it.status == com.xwurfel.tourry.feature.tours.domain.model.ParticipationStatus.JOINED }
+                            .map { it.tourId }
+                            .toSet()
+                    }
+                    .collect { joinedIds ->
+                        emit(ExplorePartialState.JoinedToursUpdated(joinedIds))
+                    }
+            }
     }
 
     private suspend fun FlowCollector<ExplorePartialState>.applyFilters(filters: ExploreFilters) {
-        val allTours = uiStateSnapshot.value.allTours
-        val currentTime = System.currentTimeMillis()
-
-        val filteredTours = allTours.filter { tour ->
-            // Date filter
-            if (filters.dateRange != null) {
-                val (startDate, endDate) = filters.dateRange
-                if (tour.startTime < startDate || tour.startTime > endDate) {
-                    return@filter false
-                }
-            }
-
-            // Duration filter
-            if (filters.maxDuration != null) {
-                if (tour.duration > filters.maxDuration * 60) { // Convert hours to minutes
-                    return@filter false
-                }
-            }
-
-            // Price filter
-            if (filters.maxPrice != null) {
-                if (tour.price > filters.maxPrice) {
-                    return@filter false
-                }
-            }
-
-            // Distance filter (mock implementation)
-            if (filters.maxDistance != null && tour.distance != null) {
-                if (tour.distance > filters.maxDistance) {
-                    return@filter false
-                }
-            }
-
-            true
+        if (filters.isEmpty()) {
+            // No filters, show all tours
+            emit(ExplorePartialState.ToursFiltered(uiStateSnapshot.value.allTours))
+            return
         }
 
-        emit(ExplorePartialState.ToursFiltered(filteredTours))
+        // For complex filtering that involves multiple criteria, we'll use search
+        searchToursUseCase(
+            query = uiStateSnapshot.value.searchQuery,
+            themes = filters.themes,
+            maxPrice = filters.maxPrice,
+            maxDistance = filters.maxDistance
+        ).onSuccess { tours ->
+            val tourPreviews = tours.toTourPreviews()
+
+            // Apply additional client-side filters that might not be handled by backend
+            val filteredTours = tourPreviews.filter { tour ->
+                applyClientSideFilters(tour, filters)
+            }
+
+            emit(ExplorePartialState.ToursFiltered(filteredTours))
+        }.onFailure { error ->
+            emit(ExplorePartialState.Error("Filtering failed: ${error.msg}"))
+        }
+    }
+
+    private fun applyClientSideFilters(tour: TourPreview, filters: ExploreFilters): Boolean {
+        // Apply date range filter
+        if (filters.dateRange != null) {
+            val (startDate, endDate) = filters.dateRange
+            if (tour.startTime < startDate || tour.startTime > endDate) {
+                return false
+            }
+        }
+
+        // Apply duration filter
+        if (filters.maxDuration != null) {
+            val maxDurationMinutes = filters.maxDuration * 60 // Convert hours to minutes
+            if (tour.duration > maxDurationMinutes) {
+                return false
+            }
+        }
+
+        return true
     }
 }
 
@@ -283,8 +317,17 @@ data class TourPreview(
 )
 
 data class ExploreFilters(
+    val themes: List<String> = emptyList(),
     val dateRange: Pair<Long, Long>? = null,
     val maxDuration: Int? = null, // in hours
     val maxPrice: Double? = null,
     val maxDistance: Float? = null // in km
-)
+) {
+    fun isEmpty(): Boolean {
+        return themes.isEmpty() &&
+                dateRange == null &&
+                maxDuration == null &&
+                maxPrice == null &&
+                maxDistance == null
+    }
+}

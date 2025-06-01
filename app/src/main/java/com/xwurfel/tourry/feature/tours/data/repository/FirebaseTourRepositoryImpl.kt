@@ -52,9 +52,14 @@ class FirebaseTourRepositoryImpl @Inject constructor(
                     return@addSnapshotListener
                 }
 
+                val currentTime = System.currentTimeMillis()
                 val tours = snapshot?.documents?.mapNotNull { doc ->
-                    doc.toObject<FirestoreTour>()?.copy(id = doc.id)?.let {
-                        TourMapper.toDomain(it)
+                    doc.toObject<FirestoreTour>()?.copy(id = doc.id)?.let { firestoreTour ->
+                        val startTime = firestoreTour.startTime.toDate().time
+                        val isLiveSoon =
+                            startTime - currentTime in 0..3600000 // 1 hour in milliseconds
+
+                        TourMapper.toDomain(firestoreTour.copy(isLive = isLiveSoon))
                     }
                 } ?: emptyList()
 

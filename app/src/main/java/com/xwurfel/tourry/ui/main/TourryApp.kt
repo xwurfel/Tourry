@@ -33,6 +33,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavDestination
 import androidx.navigation.NavDestination.Companion.hierarchy
+import com.xwurfel.tourry.feature.profile.domain.usecase.ObserveAuthenticationStateUseCase
 
 // Values taken from the source code of corresponding Composables.
 // Animating appearance / disappearance of these bars is difficult, as AnimatedVisibility
@@ -45,9 +46,11 @@ private const val NAV_RAIL_WIDTH = 80
 @Composable
 fun TourryApp(
     windowSizeClass: WindowSizeClass,
+    observeAuthenticationStateUseCase: ObserveAuthenticationStateUseCase,
     modifier: Modifier = Modifier,
     appState: TourryAppState = rememberTourryAppState(
         windowSizeClass,
+        observeAuthenticationStateUseCase
     ),
 ) {
     Scaffold(
@@ -111,6 +114,8 @@ fun TourryApp(
             Column(Modifier.fillMaxSize()) {
                 TourryNavHost(appState = appState)
             }
+
+            AuthenticationStateEffect(appState)
         }
     }
 }

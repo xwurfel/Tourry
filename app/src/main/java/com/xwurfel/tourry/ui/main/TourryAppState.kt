@@ -11,16 +11,18 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navOptions
+import com.xwurfel.tourry.feature.profile.domain.usecase.ObserveAuthenticationStateUseCase
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.WhileSubscribed
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlin.time.Duration.Companion.seconds
 
 @Composable
 fun rememberTourryAppState(
     windowSizeClass: WindowSizeClass,
+    observeAuthenticationStateUseCase: ObserveAuthenticationStateUseCase,
     coroutineScope: CoroutineScope = rememberCoroutineScope(),
     navController: NavHostController = rememberNavController(),
 ): TourryAppState {
@@ -31,6 +33,7 @@ fun rememberTourryAppState(
         TourryAppState(
             navController,
             windowSizeClass,
+            observeAuthenticationStateUseCase,
             coroutineScope,
         )
     }
@@ -40,6 +43,7 @@ fun rememberTourryAppState(
 class TourryAppState(
     val navController: NavHostController,
     val windowSizeClass: WindowSizeClass,
+    val observeAuthenticationStateUseCase: ObserveAuthenticationStateUseCase,
     coroutineScope: CoroutineScope,
 ) {
     val currentDestination: NavDestination?
@@ -53,7 +57,6 @@ class TourryAppState(
                 authRoute -> false
                 liveTourRouteWithArgs -> false
                 tourSummaryRouteWithArgs -> false
-                // Hide navigation during tour creation for focused experience
                 tourCreationRoute -> false
                 tourCreationRouteWithArgs -> false
                 else -> true
@@ -70,15 +73,19 @@ class TourryAppState(
             return windowSizeClass.widthSizeClass != WindowWidthSizeClass.Compact && shouldShowNavigation
         }
 
-    val startDestination = flow<String> {
-        // TODO: Check if user is authenticated
-        // For now, always start with explore
-        emit(exploreRoute)
-    }.stateIn(
-        coroutineScope,
-        SharingStarted.WhileSubscribed(5.seconds),
-        initialValue = exploreRoute
-    )
+    val startDestination = observeAuthenticationStateUseCase()
+        .map { isAuthenticated ->
+            if (isAuthenticated) {
+                exploreRoute
+            } else {
+                authRoute
+            }
+        }
+        .stateIn(
+            scope = coroutineScope,
+            started = SharingStarted.WhileSubscribed(5.seconds),
+            initialValue = authRoute
+        )
 
     val topLevelDestinations: List<TopLevelDestination> = TopLevelDestination.entries
 
@@ -92,8 +99,8 @@ class TourryAppState(
             // Avoid multiple copies of the same destination when
             // reselecting the same item
             launchSingleTop = true
-            // Restore state when reselecting a previously selected item
-            restoreState = true
+            // Don't restore state when reselecting a previously selected item
+            restoreState = false
         }
 
         when (topLevelDestination) {
@@ -110,5 +117,27 @@ class TourryAppState(
     fun isTopLevelDestination(): Boolean {
         val route = currentDestination?.route
         return route in listOf(exploreRoute, myToursRoute, profileRoute)
+    }
+
+    /**
+     * Navigate to authenticated area after successful sign in
+     * Clears auth from backstack to prevent back navigation to sign in
+     */
+    fun navigateToAuthenticatedArea() {
+        navController.navigate(exploreRoute) {
+            popUpTo(authRoute) { inclusive = true }
+            launchSingleTop = true
+        }
+    }
+
+    /**
+     * Navigate to authentication when user signs out
+     * Clears entire backstack for security
+     */
+    fun navigateToAuthentication() {
+        navController.navigate(authRoute) {
+            popUpTo(0) { inclusive = true }
+            launchSingleTop = true
+        }
     }
 }
