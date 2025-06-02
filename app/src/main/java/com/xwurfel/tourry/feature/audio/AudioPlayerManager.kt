@@ -92,7 +92,7 @@ class AudioPlayerManager @Inject constructor(
                 prepareAsync()
                 _playbackState.value = PlaybackState.LOADING
             }
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             _playbackState.value = PlaybackState.ERROR
         }
     }
@@ -105,7 +105,7 @@ class AudioPlayerManager @Inject constructor(
                 player.start()
                 _playbackState.value = PlaybackState.PLAYING
                 startPositionUpdates()
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 _playbackState.value = PlaybackState.ERROR
             }
         }

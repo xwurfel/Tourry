@@ -41,8 +41,8 @@ import com.google.maps.android.compose.GoogleMap
 import com.google.maps.android.compose.Marker
 import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.rememberCameraPositionState
-import com.xwurfel.tourry.ui.tour.creation.TourStop
-import com.xwurfel.tourry.ui.tour.creation.TourTheme
+import com.xwurfel.tourry.feature.tours.domain.model.CreationTourStop
+import com.xwurfel.tourry.feature.tours.domain.model.TourTheme
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -53,7 +53,7 @@ fun PreviewStep(
     theme: TourTheme?,
     description: String,
     coverImageUri: String?,
-    stops: List<TourStop>,
+    stops: List<CreationTourStop>,
     startDateTime: Long?,
     price: Double
 ) {

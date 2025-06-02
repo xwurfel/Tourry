@@ -2,12 +2,12 @@ package com.xwurfel.tourry.feature.mock
 
 import com.xwurfel.tourry.feature.profile.domain.model.User
 import com.xwurfel.tourry.feature.profile.domain.model.UserStats
-import com.xwurfel.tourry.ui.explore.TourPreview
-import com.xwurfel.tourry.ui.tour.detail.TourDetail
-import com.xwurfel.tourry.ui.tour.detail.TourGuide
-import com.xwurfel.tourry.ui.tour.detail.TourStopDetail
-import com.xwurfel.tourry.ui.tour.mine.MyTour
-import com.xwurfel.tourry.ui.tour.mine.TourStatus
+import com.xwurfel.tourry.feature.tours.domain.model.TourPreview
+import com.xwurfel.tourry.feature.tours.domain.model.TourDetail
+import com.xwurfel.tourry.feature.tours.domain.model.TourGuide
+import com.xwurfel.tourry.feature.tours.domain.model.TourStopDetail
+import com.xwurfel.tourry.feature.tours.domain.model.MyTour
+import com.xwurfel.tourry.feature.tours.domain.model.MyTourStatus
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -175,7 +175,7 @@ class MockDataManager @Inject constructor() {
             title = title,
             coverImageUrl = null,
             startTime = startDateTime ?: (System.currentTimeMillis() + 86400000),
-            status = TourStatus.UPCOMING,
+            status = MyTourStatus.UPCOMING,
             participantsCount = 0,
             rating = null
         )
@@ -208,9 +208,9 @@ class MockDataManager @Inject constructor() {
 
         return _availableTours.value.filter { it.id in joinedIds }.map { tour ->
             val status = when {
-                tour.id in _liveTours.value -> TourStatus.LIVE
-                tour.startTime > currentTime -> TourStatus.UPCOMING
-                else -> TourStatus.COMPLETED
+                tour.id in _liveTours.value -> MyTourStatus.LIVE
+                tour.startTime > currentTime -> MyTourStatus.UPCOMING
+                else -> MyTourStatus.COMPLETED
             }
 
             MyTour(
@@ -220,7 +220,7 @@ class MockDataManager @Inject constructor() {
                 startTime = tour.startTime,
                 status = status,
                 participantsCount = Random.nextInt(3, 15),
-                rating = if (status == TourStatus.COMPLETED) (4.0f + Random.nextFloat()).coerceAtMost(
+                rating = if (status == MyTourStatus.COMPLETED) (4.0f + Random.nextFloat()).coerceAtMost(
                     5.0f
                 ) else null
             )
@@ -517,7 +517,7 @@ class MockDataManager @Inject constructor() {
                 title = "My Secret Garden Tour",
                 coverImageUrl = "https://images.unsplash.com/photo-1416879595882-3373a0480b5b?auto=format&fit=crop&w=400&q=80",
                 startTime = currentTime + 7200000,
-                status = TourStatus.UPCOMING,
+                status = MyTourStatus.UPCOMING,
                 participantsCount = 5,
                 rating = null
             ), MyTour(
@@ -525,7 +525,7 @@ class MockDataManager @Inject constructor() {
                 title = "Local Artisan Workshop",
                 coverImageUrl = "https://images.unsplash.com/photo-1452860606245-08befc0ff44b?auto=format&fit=crop&w=400&q=80",
                 startTime = currentTime - 172800000,
-                status = TourStatus.COMPLETED,
+                status = MyTourStatus.COMPLETED,
                 participantsCount = 8,
                 rating = 4.8f
             )

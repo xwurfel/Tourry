@@ -81,7 +81,6 @@ object TourMapper {
             latitude = firestoreStop.location.latitude,
             longitude = firestoreStop.location.longitude,
             order = firestoreStop.order,
-            geofenceRadius = firestoreStop.geofenceRadius,
             content = firestoreStop.content?.let { toDomain(it) }
         )
     }
@@ -93,7 +92,6 @@ object TourMapper {
             description = createStop.description,
             location = GeoPoint(createStop.latitude, createStop.longitude),
             order = createStop.order,
-            geofenceRadius = createStop.geofenceRadius,
             content = createStop.content?.let { toFirestore(it) }
         )
     }

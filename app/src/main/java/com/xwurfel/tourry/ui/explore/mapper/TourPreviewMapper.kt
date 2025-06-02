@@ -1,7 +1,7 @@
 package com.xwurfel.tourry.ui.explore.mapper
 
 import com.xwurfel.tourry.feature.tours.domain.model.Tour
-import com.xwurfel.tourry.ui.explore.TourPreview
+import com.xwurfel.tourry.feature.tours.domain.model.TourPreview
 
 object TourPreviewMapper {
 

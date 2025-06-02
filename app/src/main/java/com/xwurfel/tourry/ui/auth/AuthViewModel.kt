@@ -6,7 +6,6 @@ import com.google.android.gms.common.api.ApiException
 import com.xwurfel.tourry.core.domain.util.onFailure
 import com.xwurfel.tourry.core.domain.util.onSuccess
 import com.xwurfel.tourry.core.ui.MviViewModel
-import com.xwurfel.tourry.feature.mock.MockDataManager
 import com.xwurfel.tourry.feature.profile.domain.usecase.CreateAccountUseCase
 import com.xwurfel.tourry.feature.profile.domain.usecase.SendPasswordResetUseCase
 import com.xwurfel.tourry.feature.profile.domain.usecase.SignInWithEmailUseCase
@@ -14,7 +13,6 @@ import com.xwurfel.tourry.feature.profile.domain.usecase.SignInWithGoogleUseCase
 import com.xwurfel.tourry.ui.auth.AuthPartialState.AuthSuccess
 import com.xwurfel.tourry.ui.auth.AuthPartialState.Error
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import timber.log.Timber
@@ -27,7 +25,6 @@ class AuthViewModel @Inject constructor(
     private val createAccountUseCase: CreateAccountUseCase,
     private val sendPasswordResetUseCase: SendPasswordResetUseCase,
     private val googleSignInClient: GoogleSignInClient,
-    private val mockDataManager: MockDataManager,
 ) : MviViewModel<AuthUiState, AuthPartialState, AuthEvent, AuthIntent>(
     initialState = AuthUiState()
 ) {

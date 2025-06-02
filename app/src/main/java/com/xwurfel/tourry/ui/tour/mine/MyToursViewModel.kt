@@ -6,6 +6,8 @@ import com.xwurfel.tourry.core.domain.util.onFailure
 import com.xwurfel.tourry.core.domain.util.onSuccess
 import com.xwurfel.tourry.core.ui.MviViewModel
 import com.xwurfel.tourry.feature.profile.domain.usecase.GetCurrentUserIdUseCase
+import com.xwurfel.tourry.feature.tours.domain.model.MyTour
+import com.xwurfel.tourry.feature.tours.domain.model.MyTourStatus
 import com.xwurfel.tourry.feature.tours.domain.repository.TourRepository
 import com.xwurfel.tourry.feature.tours.domain.usecase.GetTourByIdUseCase
 import com.xwurfel.tourry.feature.tours.domain.usecase.ObserveToursByAuthorUseCase
@@ -52,10 +54,10 @@ class MyToursViewModel @Inject constructor(
             }
 
             is MyToursIntent.TourClicked -> {
-                when (intent.tourStatus) {
-                    TourStatus.LIVE -> publishEvent(MyToursEvent.NavigateToLiveTour(intent.tourId))
-                    TourStatus.UPCOMING -> publishEvent(MyToursEvent.NavigateToTourDetail(intent.tourId))
-                    TourStatus.COMPLETED -> publishEvent(MyToursEvent.NavigateToTourSummary(intent.tourId))
+                when (intent.myTourStatus) {
+                    MyTourStatus.LIVE -> publishEvent(MyToursEvent.NavigateToLiveTour(intent.tourId))
+                    MyTourStatus.UPCOMING -> publishEvent(MyToursEvent.NavigateToTourDetail(intent.tourId))
+                    MyTourStatus.COMPLETED -> publishEvent(MyToursEvent.NavigateToTourSummary(intent.tourId))
                 }
             }
 
@@ -211,7 +213,7 @@ sealed interface MyToursPartialState {
 
 sealed interface MyToursIntent {
     data class TabChanged(val tab: MyToursTab) : MyToursIntent
-    data class TourClicked(val tourId: String, val tourStatus: TourStatus) : MyToursIntent
+    data class TourClicked(val tourId: String, val myTourStatus: MyTourStatus) : MyToursIntent
     data class EditTour(val tourId: String) : MyToursIntent
     data class CancelTour(val tourId: String) : MyToursIntent
     object RefreshTours : MyToursIntent
@@ -229,16 +231,3 @@ enum class MyToursTab {
     JOINED, CREATED
 }
 
-data class MyTour(
-    val id: String,
-    val title: String,
-    val coverImageUrl: String?,
-    val startTime: Long,
-    val status: TourStatus,
-    val participantsCount: Int = 0,
-    val rating: Float? = null
-)
-
-enum class TourStatus {
-    UPCOMING, LIVE, COMPLETED
-}

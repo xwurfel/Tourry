@@ -6,6 +6,7 @@ import com.xwurfel.tourry.core.domain.util.onSuccess
 import com.xwurfel.tourry.core.ui.MviViewModel
 import com.xwurfel.tourry.feature.analytics.TourAnalytics
 import com.xwurfel.tourry.feature.profile.domain.usecase.GetCurrentUserIdUseCase
+import com.xwurfel.tourry.feature.tours.domain.model.TourDetail
 import com.xwurfel.tourry.feature.tours.domain.usecase.GetTourByIdUseCase
 import com.xwurfel.tourry.feature.tours.domain.usecase.JoinTourUseCase
 import com.xwurfel.tourry.feature.tours.domain.usecase.ObserveUserParticipationsUseCase
@@ -223,40 +224,3 @@ sealed interface TourDetailEvent {
     object NavigateToBooking : TourDetailEvent
 }
 
-// Data models
-data class TourDetail(
-    val id: String,
-    val title: String,
-    val description: String,
-    val coverImageUrl: String?,
-    val theme: String,
-    val rating: Float,
-    val reviewsCount: Int,
-    val duration: Int, // minutes
-    val distance: Float, // km
-    val price: Double,
-    val isFree: Boolean,
-    val startTime: Long,
-    val isLive: Boolean,
-    val isJoined: Boolean,
-    val spotsLeft: Int?,
-    val guide: TourGuide,
-    val stops: List<TourStopDetail>
-)
-
-data class TourGuide(
-    val id: String,
-    val name: String,
-    val avatarUrl: String?,
-    val rating: Float,
-    val toursCount: Int
-)
-
-data class TourStopDetail(
-    val id: String,
-    val name: String,
-    val description: String,
-    val latitude: Double,
-    val longitude: Double,
-    val order: Int
-)

@@ -3,8 +3,8 @@ package com.xwurfel.tourry.ui.tour.mine.mapper
 import com.xwurfel.tourry.feature.tours.domain.model.ParticipationStatus
 import com.xwurfel.tourry.feature.tours.domain.model.Tour
 import com.xwurfel.tourry.feature.tours.domain.model.TourParticipation
-import com.xwurfel.tourry.ui.tour.mine.MyTour
-import com.xwurfel.tourry.ui.tour.mine.TourStatus
+import com.xwurfel.tourry.feature.tours.domain.model.MyTour
+import com.xwurfel.tourry.feature.tours.domain.model.MyTourStatus
 
 object MyTourMapper {
 
@@ -12,9 +12,9 @@ object MyTourMapper {
         val currentTime = System.currentTimeMillis()
 
         val status = when {
-            isLive -> TourStatus.LIVE
-            startTime > currentTime -> TourStatus.UPCOMING
-            else -> TourStatus.COMPLETED
+            isLive -> MyTourStatus.LIVE
+            startTime > currentTime -> MyTourStatus.UPCOMING
+            else -> MyTourStatus.COMPLETED
         }
 
         return MyTour(
@@ -34,13 +34,13 @@ object MyTourMapper {
         val currentTime = System.currentTimeMillis()
 
         val status = when (this.status) {
-            ParticipationStatus.COMPLETED -> TourStatus.COMPLETED
-            ParticipationStatus.CANCELLED -> TourStatus.COMPLETED
+            ParticipationStatus.COMPLETED -> MyTourStatus.COMPLETED
+            ParticipationStatus.CANCELLED -> MyTourStatus.COMPLETED
             ParticipationStatus.JOINED -> {
                 when {
-                    tour.isLive -> TourStatus.LIVE
-                    tour.startTime > currentTime -> TourStatus.UPCOMING
-                    else -> TourStatus.COMPLETED
+                    tour.isLive -> MyTourStatus.LIVE
+                    tour.startTime > currentTime -> MyTourStatus.UPCOMING
+                    else -> MyTourStatus.COMPLETED
                 }
             }
         }

@@ -9,6 +9,5 @@ data class FirestoreTourStop(
     @PropertyName("description") val description: String = "",
     @PropertyName("location") val location: GeoPoint = GeoPoint(0.0, 0.0),
     @PropertyName("order") val order: Int = 0,
-    @PropertyName("geofenceRadius") val geofenceRadius: Float = 50f,
     @PropertyName("content") val content: FirestoreStopContent? = null
 )

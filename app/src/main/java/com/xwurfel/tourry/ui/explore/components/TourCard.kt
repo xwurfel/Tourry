@@ -45,7 +45,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.xwurfel.tourry.R
-import com.xwurfel.tourry.ui.explore.TourPreview
+import com.xwurfel.tourry.feature.tours.domain.model.TourPreview
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale

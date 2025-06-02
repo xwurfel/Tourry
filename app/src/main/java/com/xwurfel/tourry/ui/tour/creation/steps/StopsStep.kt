@@ -60,15 +60,15 @@ import com.google.maps.android.compose.GoogleMap
 import com.google.maps.android.compose.Marker
 import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.rememberCameraPositionState
-import com.xwurfel.tourry.ui.tour.creation.TourStop
+import com.xwurfel.tourry.feature.tours.domain.model.CreationTourStop
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StopsStep(
-    stops: List<TourStop>,
-    onAddStop: (TourStop) -> Unit,
-    onUpdateStop: (Int, TourStop) -> Unit,
+    stops: List<CreationTourStop>,
+    onAddStop: (CreationTourStop) -> Unit,
+    onUpdateStop: (Int, CreationTourStop) -> Unit,
     onRemoveStop: (Int) -> Unit,
     onReorderStops: (Int, Int) -> Unit
 ) {
@@ -180,7 +180,7 @@ fun StopsStep(
 
 @Composable
 fun EnhancedStopCard(
-    stop: TourStop,
+    stop: CreationTourStop,
     index: Int,
     isFirst: Boolean,
     isLast: Boolean,
@@ -313,10 +313,10 @@ fun EnhancedStopCard(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EnhancedStopEditDialog(
-    stop: TourStop?,
+    stop: CreationTourStop?,
     selectedLocation: LatLng?,
     onDismiss: () -> Unit,
-    onSave: (TourStop) -> Unit
+    onSave: (CreationTourStop) -> Unit
 ) {
     var name by remember(stop) { mutableStateOf(stop?.name ?: "") }
     var description by remember(stop) { mutableStateOf(stop?.description ?: "") }
@@ -560,7 +560,7 @@ fun EnhancedStopEditDialog(
                             longitude = location.longitude,
                             mediaUrls = mediaUrls,
                             audioUrl = audioUrl
-                        ) ?: TourStop(
+                        ) ?: CreationTourStop(
                             name = name,
                             description = description,
                             latitude = location.latitude,

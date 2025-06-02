@@ -56,6 +56,8 @@ import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.rememberCameraPositionState
 import com.xwurfel.tourry.R
 import com.xwurfel.tourry.core.extension.collectWithLifecycle
+import com.xwurfel.tourry.feature.tours.domain.model.TourDetail
+import com.xwurfel.tourry.feature.tours.domain.model.TourStopDetail
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale

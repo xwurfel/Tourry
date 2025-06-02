@@ -1,9 +1,9 @@
 package com.xwurfel.tourry.ui.tour.detail.mapper
 
 import com.xwurfel.tourry.feature.tours.domain.model.Tour
-import com.xwurfel.tourry.ui.tour.detail.TourDetail
-import com.xwurfel.tourry.ui.tour.detail.TourGuide
-import com.xwurfel.tourry.ui.tour.detail.TourStopDetail
+import com.xwurfel.tourry.feature.tours.domain.model.TourDetail
+import com.xwurfel.tourry.feature.tours.domain.model.TourGuide
+import com.xwurfel.tourry.feature.tours.domain.model.TourStopDetail
 
 object TourDetailMapper {
 

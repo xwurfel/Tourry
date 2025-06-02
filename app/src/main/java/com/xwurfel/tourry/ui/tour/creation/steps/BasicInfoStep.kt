@@ -40,7 +40,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
-import com.xwurfel.tourry.ui.tour.creation.TourTheme
+import com.xwurfel.tourry.feature.tours.domain.model.TourTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -121,7 +121,7 @@ fun BasicInfoStep(
             onExpandedChange = { expandedThemeMenu = it }
         ) {
             OutlinedTextField(
-                value = theme?.name ?: "",
+                value = theme?.displayName ?: "",
                 onValueChange = {},
                 readOnly = true,
                 label = { Text("Theme") },
@@ -137,7 +137,7 @@ fun BasicInfoStep(
             ) {
                 TourTheme.entries.forEach { themeOption ->
                     DropdownMenuItem(
-                        text = { Text(themeOption.name) },
+                        text = { Text(themeOption.displayName) },
                         onClick = {
                             onInfoChanged(title, themeOption, description, coverImageUri)
                             expandedThemeMenu = false

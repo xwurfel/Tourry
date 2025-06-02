@@ -7,6 +7,5 @@ data class TourStop(
     val latitude: Double,
     val longitude: Double,
     val order: Int,
-    val geofenceRadius: Float,
     val content: StopContent? = null
 )

@@ -8,11 +8,14 @@ import com.xwurfel.tourry.core.domain.util.onSuccess
 import com.xwurfel.tourry.core.ui.MviViewModel
 import com.xwurfel.tourry.feature.analytics.TourAnalytics
 import com.xwurfel.tourry.feature.audio.AudioPlayerManager
-import com.xwurfel.tourry.feature.audio.PlaybackState
+import com.xwurfel.tourry.feature.audio.domain.model.AudioPlayerState
 import com.xwurfel.tourry.feature.geofencing.GeofenceEvent
 import com.xwurfel.tourry.feature.geofencing.GeofencingManager
 import com.xwurfel.tourry.feature.location.LocationManager
+import com.xwurfel.tourry.feature.location.domain.model.UserLocation
 import com.xwurfel.tourry.feature.tours.domain.model.LiveTourStop
+import com.xwurfel.tourry.feature.tours.domain.model.RouteDeviation
+import com.xwurfel.tourry.feature.tours.domain.model.TourStatus
 import com.xwurfel.tourry.feature.tours.domain.usecase.CompleteTourSessionUseCase
 import com.xwurfel.tourry.feature.tours.domain.usecase.GetLiveTourUseCase
 import com.xwurfel.tourry.feature.tours.domain.usecase.RecordStopVisitUseCase
@@ -634,60 +637,3 @@ sealed interface LiveTourEvent {
 }
 
 
-data class UserLocation(
-    val latitude: Double,
-    val longitude: Double,
-    val accuracy: Float = 0f,
-    val timestamp: Long = System.currentTimeMillis()
-) {
-    val isAccurate: Boolean get() = accuracy <= 20f // Within 20 meters
-
-    fun distanceTo(latitude: Double, longitude: Double): Float {
-        val results = FloatArray(1)
-        android.location.Location.distanceBetween(
-            this.latitude, this.longitude,
-            latitude, longitude,
-            results
-        )
-        return results[0]
-    }
-}
-
-data class RouteDeviation(
-    val isDeviated: Boolean,
-    val distanceFromRoute: Double,
-    val nearestStopName: String?
-) {
-    val severityLevel: DeviationSeverity
-        get() = when {
-            !isDeviated -> DeviationSeverity.NONE
-            distanceFromRoute < 100 -> DeviationSeverity.MINOR
-            distanceFromRoute < 300 -> DeviationSeverity.MODERATE
-            else -> DeviationSeverity.MAJOR
-        }
-}
-
-enum class DeviationSeverity {
-    NONE, MINOR, MODERATE, MAJOR
-}
-
-enum class TourStatus {
-    PREPARING,  // Initial state, waiting for location permission/setup
-    ACTIVE,     // Tour is running, tracking location
-    PAUSED,     // User paused the tour
-    COMPLETED   // Tour finished successfully
-}
-
-data class AudioPlayerState(
-    val playbackState: PlaybackState,
-    val currentPosition: Int,
-    val duration: Int
-) {
-    val isPlaying: Boolean get() = playbackState == PlaybackState.PLAYING
-    val isPaused: Boolean get() = playbackState == PlaybackState.PAUSED
-    val isLoading: Boolean get() = playbackState == PlaybackState.LOADING
-    val hasError: Boolean get() = playbackState == PlaybackState.ERROR
-
-    val progressPercentage: Float
-        get() = if (duration > 0) currentPosition.toFloat() / duration else 0f
-}

@@ -1,9 +1,16 @@
 package com.xwurfel.tourry.ui.tour.creation
 
 import androidx.lifecycle.SavedStateHandle
+import com.xwurfel.tourry.core.domain.util.onFailure
+import com.xwurfel.tourry.core.domain.util.onSuccess
 import com.xwurfel.tourry.core.ui.MviViewModel
 import com.xwurfel.tourry.feature.analytics.TourAnalytics
-import com.xwurfel.tourry.feature.mock.MockDataManager
+import com.xwurfel.tourry.feature.tours.domain.model.CreationTourStop
+import com.xwurfel.tourry.feature.tours.domain.model.TourTheme
+import com.xwurfel.tourry.feature.tours.domain.usecase.CreateTourUseCase
+import com.xwurfel.tourry.feature.tours.domain.usecase.GetTourByIdUseCase
+import com.xwurfel.tourry.feature.tours.domain.usecase.UpdateTourUseCase
+import com.xwurfel.tourry.ui.tour.creation.mapper.TourCreationMapper.toCreateTourRequest
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -12,7 +19,9 @@ import javax.inject.Inject
 @HiltViewModel
 class TourCreationViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
-    private val mockDataManager: MockDataManager,
+    private val createTourUseCase: CreateTourUseCase,
+    private val updateTourUseCase: UpdateTourUseCase,
+    private val getTourByIdUseCase: GetTourByIdUseCase,
     private val tourAnalytics: TourAnalytics,
 ) : MviViewModel<TourCreationUiState, TourCreationPartialState, TourCreationEvent, TourCreationIntent>(
     initialState = TourCreationUiState()
@@ -25,33 +34,33 @@ class TourCreationViewModel @Inject constructor(
             observeContinuousChanges(
                 flow {
                     try {
-                        val tourDetail = mockDataManager.getTourDetail(tourId)
-                        if (tourDetail != null) {
-                            // Convert TourDetail to creation format
-                            val stops = tourDetail.stops.map { stop ->
-                                TourStop(
-                                    id = stop.id,
-                                    name = stop.name,
-                                    description = stop.description,
-                                    latitude = stop.latitude,
-                                    longitude = stop.longitude,
-                                    order = stop.order
+                        getTourByIdUseCase(tourId)
+                            .onSuccess { tourDetail ->
+                                val stops = tourDetail.stops.map { stop ->
+                                    CreationTourStop(
+                                        id = stop.id,
+                                        name = stop.name,
+                                        description = stop.description,
+                                        latitude = stop.latitude,
+                                        longitude = stop.longitude,
+                                        order = stop.order
+                                    )
+                                }
+
+                                emit(
+                                    TourCreationPartialState.TourLoaded(
+                                        title = tourDetail.title,
+                                        theme = TourTheme.valueOf(tourDetail.theme),
+                                        description = tourDetail.description,
+                                        coverImageUri = tourDetail.coverImageUrl,
+                                        stops = stops,
+                                        startDateTime = tourDetail.startTime,
+                                        price = tourDetail.price,
+                                        recurrenceRule = null
+                                    )
                                 )
                             }
 
-                            emit(
-                                TourCreationPartialState.TourLoaded(
-                                    title = tourDetail.title,
-                                    theme = TourTheme.valueOf(tourDetail.theme),
-                                    description = tourDetail.description,
-                                    coverImageUri = tourDetail.coverImageUrl,
-                                    stops = stops,
-                                    startDateTime = tourDetail.startTime,
-                                    price = tourDetail.price,
-                                    recurrenceRule = null // Mock doesn't store this yet
-                                )
-                            )
-                        }
                     } catch (_: Exception) {
                         emit(TourCreationPartialState.Error("Failed to load tour for editing"))
                     }
@@ -140,26 +149,24 @@ class TourCreationViewModel @Inject constructor(
                 emit(TourCreationPartialState.Publishing)
 
                 try {
-                    kotlinx.coroutines.delay(1500)
+                    val createRequest = state.toCreateTourRequest()
 
-                    val newTourId = mockDataManager.createTour(
-                        title = state.title,
-                        description = state.description,
-                        stops = state.stops,
-                        startDateTime = state.startDateTime,
-                        price = state.price
-                    )
+                    createTourUseCase(createRequest)
+                        .onSuccess { newTourId ->
+                            // Track tour creation with detailed analytics
+                            tourAnalytics.trackTourCreation(
+                                tourId = newTourId,
+                                stopCount = state.stops.size,
+                                hasAudio = state.stops.any { it.audioUrl != null },
+                                hasImages = state.stops.any { it.mediaUrls.isNotEmpty() },
+                                price = state.price
+                            )
 
-                    // Track tour creation with detailed analytics
-                    tourAnalytics.trackTourCreation(
-                        tourId = newTourId,
-                        stopCount = state.stops.size,
-                        hasAudio = state.stops.any { it.audioUrl != null },
-                        hasImages = state.stops.any { it.mediaUrls.isNotEmpty() },
-                        price = state.price
-                    )
-
-                    emit(TourCreationPartialState.Published(newTourId))
+                            emit(TourCreationPartialState.Published(newTourId))
+                        }
+                        .onFailure { error ->
+                            emit(TourCreationPartialState.Error("Failed to publish tour: ${error.msg}"))
+                        }
                 } catch (e: Exception) {
                     emit(TourCreationPartialState.Error("Failed to publish tour: ${e.message}"))
                 }
@@ -181,27 +188,19 @@ class TourCreationViewModel @Inject constructor(
                 emit(TourCreationPartialState.Publishing)
 
                 try {
-                    kotlinx.coroutines.delay(1000)
+                    val updateRequest = state.toCreateTourRequest()
 
-                    // Update existing tour instead of creating new one
-                    val success = mockDataManager.updateTour(
-                        tourId = tourId!!, // We know it's not null in edit mode
-                        title = state.title,
-                        description = state.description,
-                        stops = state.stops,
-                        startDateTime = state.startDateTime,
-                        price = state.price
-                    )
-
-                    if (success) {
-                        tourAnalytics.trackEvent(
-                            "tour_updated",
-                            mapOf("tour_id" to tourId)
-                        )
-                        emit(TourCreationPartialState.TourUpdated(tourId))
-                    } else {
-                        emit(TourCreationPartialState.Error("Failed to update tour"))
-                    }
+                    updateTourUseCase(tourId!!, updateRequest)
+                        .onSuccess {
+                            tourAnalytics.trackEvent(
+                                "tour_updated",
+                                mapOf("tour_id" to tourId)
+                            )
+                            emit(TourCreationPartialState.TourUpdated(tourId))
+                        }
+                        .onFailure { error ->
+                            emit(TourCreationPartialState.Error("Failed to update tour: ${error.msg}"))
+                        }
                 } catch (e: Exception) {
                     emit(TourCreationPartialState.Error("Failed to update tour: ${e.message}"))
                 }
@@ -363,7 +362,7 @@ data class TourCreationUiState(
     val theme: TourTheme? = null,
     val description: String = "",
     val coverImageUri: String? = null,
-    val stops: List<TourStop> = emptyList(),
+    val stops: List<CreationTourStop> = emptyList(),
     val startDateTime: Long? = null,
     val price: Double = 0.0,
     val recurrenceRule: String? = null,
@@ -380,8 +379,8 @@ sealed interface TourCreationPartialState {
         val coverImageUri: String?
     ) : TourCreationPartialState
 
-    data class StopAdded(val stop: TourStop) : TourCreationPartialState
-    data class StopUpdated(val index: Int, val stop: TourStop) : TourCreationPartialState
+    data class StopAdded(val stop: CreationTourStop) : TourCreationPartialState
+    data class StopUpdated(val index: Int, val stop: CreationTourStop) : TourCreationPartialState
     data class StopRemoved(val index: Int) : TourCreationPartialState
     data class StopsReordered(val fromIndex: Int, val toIndex: Int) : TourCreationPartialState
 
@@ -403,7 +402,7 @@ sealed interface TourCreationPartialState {
         val theme: TourTheme?,
         val description: String,
         val coverImageUri: String?,
-        val stops: List<TourStop>,
+        val stops: List<CreationTourStop>,
         val startDateTime: Long?,
         val price: Double,
         val recurrenceRule: String?
@@ -420,8 +419,8 @@ sealed interface TourCreationIntent {
         val coverImageUri: String?
     ) : TourCreationIntent
 
-    data class AddStop(val stop: TourStop) : TourCreationIntent
-    data class UpdateStop(val index: Int, val stop: TourStop) : TourCreationIntent
+    data class AddStop(val stop: CreationTourStop) : TourCreationIntent
+    data class UpdateStop(val index: Int, val stop: CreationTourStop) : TourCreationIntent
     data class RemoveStop(val index: Int) : TourCreationIntent
     data class ReorderStops(val fromIndex: Int, val toIndex: Int) : TourCreationIntent
 
@@ -443,25 +442,3 @@ sealed interface TourCreationEvent {
     data class NavigateToTourDetail(val tourId: String) : TourCreationEvent
 }
 
-// Data models
-enum class TourTheme {
-    HISTORICAL,
-    CULTURAL,
-    FOOD,
-    ARCHITECTURE,
-    NATURE,
-    ADVENTURE,
-    PHOTOGRAPHY,
-    OTHER
-}
-
-data class TourStop(
-    val id: String = java.util.UUID.randomUUID().toString(),
-    val name: String,
-    val description: String,
-    val latitude: Double,
-    val longitude: Double,
-    val mediaUrls: List<String> = emptyList(),
-    val audioUrl: String? = null,
-    val order: Int = 0
-)

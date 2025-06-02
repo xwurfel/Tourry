@@ -71,7 +71,10 @@ import com.google.maps.android.compose.Polyline
 import com.google.maps.android.compose.rememberCameraPositionState
 import com.google.maps.android.compose.rememberMarkerState
 import com.xwurfel.tourry.core.extension.collectWithLifecycle
+import com.xwurfel.tourry.feature.audio.domain.model.AudioPlayerState
+import com.xwurfel.tourry.feature.tours.domain.model.RouteDeviation
 import com.xwurfel.tourry.feature.tours.domain.model.StopContent
+import com.xwurfel.tourry.feature.tours.domain.model.TourStatus
 import com.xwurfel.tourry.util.permissions.LocationPermissionsHandler
 
 @Composable

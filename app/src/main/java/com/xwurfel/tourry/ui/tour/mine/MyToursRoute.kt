@@ -49,6 +49,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.xwurfel.tourry.R
 import com.xwurfel.tourry.core.extension.collectWithLifecycle
+import com.xwurfel.tourry.feature.tours.domain.model.MyTour
+import com.xwurfel.tourry.feature.tours.domain.model.MyTourStatus
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -266,9 +268,9 @@ fun MyTourCard(
                     // Status badge
                     Surface(
                         color = when (tour.status) {
-                            TourStatus.LIVE -> MaterialTheme.colorScheme.error
-                            TourStatus.UPCOMING -> MaterialTheme.colorScheme.primary
-                            TourStatus.COMPLETED -> MaterialTheme.colorScheme.surfaceVariant
+                            MyTourStatus.LIVE -> MaterialTheme.colorScheme.error
+                            MyTourStatus.UPCOMING -> MaterialTheme.colorScheme.primary
+                            MyTourStatus.COMPLETED -> MaterialTheme.colorScheme.surfaceVariant
                         },
                         shape = MaterialTheme.shapes.small
                     ) {
@@ -277,9 +279,9 @@ fun MyTourCard(
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                             style = MaterialTheme.typography.labelSmall,
                             color = when (tour.status) {
-                                TourStatus.LIVE -> MaterialTheme.colorScheme.onError
-                                TourStatus.UPCOMING -> MaterialTheme.colorScheme.onPrimary
-                                TourStatus.COMPLETED -> MaterialTheme.colorScheme.onSurfaceVariant
+                                MyTourStatus.LIVE -> MaterialTheme.colorScheme.onError
+                                MyTourStatus.UPCOMING -> MaterialTheme.colorScheme.onPrimary
+                                MyTourStatus.COMPLETED -> MaterialTheme.colorScheme.onSurfaceVariant
                             },
                             fontWeight = FontWeight.Bold
                         )
@@ -345,7 +347,7 @@ fun MyTourCard(
             }
 
             // Management options
-            if (showManagementOptions && tour.status == TourStatus.UPCOMING) {
+            if (showManagementOptions && tour.status == MyTourStatus.UPCOMING) {
                 HorizontalDivider()
                 Row(
                     modifier = Modifier

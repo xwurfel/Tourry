@@ -52,6 +52,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.xwurfel.tourry.core.extension.collectWithLifecycle
+import com.xwurfel.tourry.feature.tours.domain.model.TourStats
 
 @Composable
 fun TourSummaryRoute(
