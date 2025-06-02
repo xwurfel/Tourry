@@ -3,7 +3,6 @@ package com.xwurfel.tourry.ui.profile
 import com.xwurfel.tourry.core.domain.util.onFailure
 import com.xwurfel.tourry.core.domain.util.onSuccess
 import com.xwurfel.tourry.core.ui.MviViewModel
-import com.xwurfel.tourry.feature.mock.MockDataManager
 import com.xwurfel.tourry.feature.profile.domain.model.User
 import com.xwurfel.tourry.feature.profile.domain.model.UserSettings
 import com.xwurfel.tourry.feature.profile.domain.model.UserStats
@@ -27,7 +26,6 @@ class ProfileViewModel @Inject constructor(
     private val observeUserSettingsUseCase: ObserveUserSettingsUseCase,
     private val signOutUseCase: SignOutUseCase,
     private val updateUserSettingsUseCase: UpdateUserSettingsUseCase,
-    private val mockDataManager: MockDataManager // Keep for now during transition
 ) : MviViewModel<ProfileUiState, ProfilePartialState, ProfileEvent, ProfileIntent>(
     initialState = ProfileUiState()
 ) {
@@ -58,10 +56,8 @@ class ProfileViewModel @Inject constructor(
                 emit(ProfilePartialState.Loading(true))
 
                 signOutUseCase().onSuccess {
-                    mockDataManager.signOut()
                     emit(ProfilePartialState.Loading(false))
                 }.onFailure { error ->
-                    mockDataManager.signOut()
                     emit(ProfilePartialState.Loading(false))
                     emit(ProfilePartialState.Error(error.msg.toString()))
                 }
@@ -124,18 +120,14 @@ class ProfileViewModel @Inject constructor(
         observeAuthenticationStateUseCase(),
         observeUserStatsUseCase(),
         observeUserSettingsUseCase(),
-        mockDataManager.isAuthenticated,
-        mockDataManager.currentUserProfile
     ) { values: Array<Any?> ->
         val firebaseUser = values[0] as User?
         val isFirebaseAuth = values[1] as Boolean
         val firebaseStats = values[2] as UserStats?
         val firebaseSettings = values[3] as UserSettings
-        val isMockAuth = values[4] as Boolean
-        val mockUser = values[5] as User?
 
-        val user = firebaseUser ?: mockUser
-        val isAuthenticated = isFirebaseAuth || isMockAuth
+        val user = firebaseUser
+        val isAuthenticated = isFirebaseAuth
         val stats = firebaseStats ?: user?.stats
         val settings = firebaseSettings
 

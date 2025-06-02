@@ -199,9 +199,14 @@ fun TourDetailScreen(
                                     )
                                 }
                             )
+                            val distanceFormated = String.format(
+                                Locale.getDefault(),
+                                "%.2f",
+                                uiState.tour.distance
+                            )
                             AssistChip(
                                 onClick = { },
-                                label = { Text("${uiState.tour.distance} km") },
+                                label = { Text("$distanceFormated km") },
                                 leadingIcon = {
                                     Icon(
                                         Icons.AutoMirrored.Filled.DirectionsWalk,

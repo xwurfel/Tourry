@@ -13,12 +13,18 @@ import com.xwurfel.tourry.feature.tours.domain.usecase.ObserveUserParticipations
 import com.xwurfel.tourry.ui.tour.mine.mapper.MyTourMapper.toMyTour
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
+import timber.log.Timber
 import javax.inject.Inject
 
 @HiltViewModel
@@ -110,51 +116,75 @@ class MyToursViewModel @Inject constructor(
         }
     }
 
-    private fun loadMyTours(): Flow<MyToursPartialState> = flow {
-        emit(MyToursPartialState.Loading)
-
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private fun loadMyTours(): Flow<MyToursPartialState> =
         getCurrentUserIdUseCase()
             .filterNotNull()
-            .collect { userId ->
-                // Combine joined tours and created tours
+            .distinctUntilChanged()
+            .flatMapLatest { userId ->
+                Timber.d("MyTours: Loading tours for user: $userId")
+
                 combine(
                     loadJoinedTours(userId),
                     loadCreatedTours(userId)
                 ) { joinedTours, createdTours ->
+                    Timber.d("MyTours: Combined - Joined: ${joinedTours.size}, Created: ${createdTours.size}")
                     MyToursPartialState.ToursLoaded(joinedTours, createdTours)
-                }.collect { partialState ->
-                    emit(partialState)
                 }
             }
-    }
+            .catch { error ->
+                Timber.e(error, "MyTours: Error in loadMyTours flow")
+                MyToursPartialState.Error("Failed to load tours: ${error.message}")
+            }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     private fun loadJoinedTours(userId: String): Flow<List<MyTour>> {
         return observeUserParticipationsUseCase(userId)
             .map { participations ->
-                participations.mapNotNull { participation ->
-                    try {
-                        val tourResult = runCatching {
-                            withContext(ioDispatcher) {
-                                getTourByIdUseCase(participation.tourId)
-                            }
-                        }
+                Timber.d("MyTours: Got ${participations.size} participations")
+                participations
+            }
+            .flatMapLatest { participations ->
+                flow {
+                    val joinedTours = mutableListOf<MyTour>()
 
-                        tourResult.getOrNull()?.getOrNull()?.let { tour ->
-                            participation.toMyTour(tour)
+                    for (participation in participations) {
+                        try {
+                            val tour = withContext(ioDispatcher) {
+                                getTourByIdUseCase(participation.tourId).getOrNull()
+                            }
+
+                            tour?.let {
+                                val myTour = participation.toMyTour(it)
+                                myTour?.let { joinedTours.add(it) }
+                            }
+                        } catch (e: Exception) {
+                            Timber.w(e, "MyTours: Failed to load tour ${participation.tourId}")
                         }
-                    } catch (_: Exception) {
-                        null
                     }
+
+                    Timber.d("MyTours: Successfully loaded ${joinedTours.size} joined tours")
+                    emit(joinedTours.toList())
                 }
+            }
+            .flowOn(ioDispatcher)
+            .catch { error ->
+                Timber.e(error, "MyTours: Error loading joined tours")
+                emit(emptyList())
             }
     }
 
     private fun loadCreatedTours(userId: String): Flow<List<MyTour>> {
         return observeToursByAuthorUseCase(userId)
             .map { tours ->
+                Timber.d("MyTours: Got ${tours.size} created tours")
                 tours.map { tour ->
-                    tour.toMyTour(rating = tour.rating)
+                    tour.toMyTour()
                 }
+            }
+            .catch { error ->
+                Timber.e(error, "MyTours: Error loading created tours")
+                emit(emptyList())
             }
     }
 }

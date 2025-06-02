@@ -8,7 +8,7 @@ import com.xwurfel.tourry.ui.tour.mine.TourStatus
 
 object MyTourMapper {
 
-    fun Tour.toMyTour(rating: Float? = null): MyTour {
+    fun Tour.toMyTour(): MyTour {
         val currentTime = System.currentTimeMillis()
 
         val status = when {
@@ -24,7 +24,7 @@ object MyTourMapper {
             startTime = startTime,
             status = status,
             participantsCount = currentParticipants,
-            rating = rating
+            rating = this.rating
         )
     }
 

@@ -44,7 +44,7 @@ class FirebaseTourRepositoryImpl @Inject constructor(
 
     override fun observeAvailableTours(): Flow<List<Tour>> = callbackFlow {
         val listener = firestore.collection(TOURS_COLLECTION)
-            .whereEqualTo("isActive", true)
+            .whereEqualTo("active", true)
             .orderBy("createdAt", Query.Direction.DESCENDING)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
@@ -72,7 +72,7 @@ class FirebaseTourRepositoryImpl @Inject constructor(
     override fun observeToursByAuthor(authorId: String): Flow<List<Tour>> = callbackFlow {
         val listener = firestore.collection(TOURS_COLLECTION)
             .whereEqualTo("authorId", authorId)
-            .orderBy("createdAt", Query.Direction.DESCENDING)
+          //  .orderBy("createdAt", Query.Direction.DESCENDING)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
                     Timber.e(error, "Error observing tours by author")
@@ -112,7 +112,7 @@ class FirebaseTourRepositoryImpl @Inject constructor(
         // Note: Firestore has limited query capabilities
         // For production, consider using Algolia or Elasticsearch for advanced search
         var firestoreQuery = firestore.collection(TOURS_COLLECTION)
-            .whereEqualTo("isActive", true)
+            .whereEqualTo("active", true)
 
         if (themes.isNotEmpty()) {
             firestoreQuery = firestoreQuery.whereIn("theme", themes)
@@ -213,9 +213,14 @@ class FirebaseTourRepositoryImpl @Inject constructor(
             throw Exception("Unauthorized to delete this tour")
         }
 
-        // Soft delete by setting isActive to false
+        // Soft delete by setting active to false
         firestore.collection(TOURS_COLLECTION).document(tourId)
-            .update("isActive", false, "updatedAt", com.google.firebase.Timestamp.now())
+            .update(
+                "active",
+                false,
+                "updatedAt",
+                com.google.firebase.Timestamp.now()
+            )
             .await()
     }
 
@@ -232,7 +237,12 @@ class FirebaseTourRepositoryImpl @Inject constructor(
             }
 
             firestore.collection(TOURS_COLLECTION).document(tourId)
-                .update("isLive", isLive, "updatedAt", com.google.firebase.Timestamp.now())
+                .update(
+                    "live",
+                    isLive,
+                    "updatedAt",
+                    com.google.firebase.Timestamp.now()
+                )
                 .await()
         }
 
