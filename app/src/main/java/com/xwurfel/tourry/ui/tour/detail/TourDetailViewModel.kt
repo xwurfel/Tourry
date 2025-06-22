@@ -9,11 +9,12 @@ import com.xwurfel.tourry.core.ui.MviViewModel
 import com.xwurfel.tourry.feature.analytics.TourAnalytics
 import com.xwurfel.tourry.feature.location.LocationManager
 import com.xwurfel.tourry.feature.profile.domain.usecase.GetCurrentUserIdUseCase
-import com.xwurfel.tourry.feature.tours.domain.model.TourDetail
+import com.xwurfel.tourry.feature.tours.domain.model.Tour
+import com.xwurfel.tourry.feature.tours.domain.model.TourStatus
 import com.xwurfel.tourry.feature.tours.domain.usecase.GetTourByIdUseCase
 import com.xwurfel.tourry.feature.tours.domain.usecase.JoinTourUseCase
 import com.xwurfel.tourry.feature.tours.domain.usecase.ObserveUserParticipationsUseCase
-import com.xwurfel.tourry.ui.tour.detail.mapper.TourDetailMapper.toTourDetail
+import com.xwurfel.tourry.feature.tours.domain.usecase.StartTourUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
@@ -29,6 +30,7 @@ class TourDetailViewModel @Inject constructor(
     private val joinTourUseCase: JoinTourUseCase,
     private val observeUserParticipationsUseCase: ObserveUserParticipationsUseCase,
     private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
+    private val startTourUseCase: StartTourUseCase,
     private val tourAnalytics: TourAnalytics,
     @ApplicationContext private val context: Context,
     locationManager: LocationManager,
@@ -77,19 +79,20 @@ class TourDetailViewModel @Inject constructor(
 
                         emit(TourDetailPartialState.TourJoined)
 
-                        if (tour?.isLive == true) {
-                            publishEvent(TourDetailEvent.NavigateToLiveTour)
-                        } else {
-                            publishEvent(TourDetailEvent.NavigateToBooking)
+                        when (tour?.status) {
+                            TourStatus.ACTIVE -> publishEvent(TourDetailEvent.NavigateToLiveTour)
+                            TourStatus.READY_TO_START -> {
+                                emit(TourDetailPartialState.TourReadyToStart)
+                            }
+
+                            else -> publishEvent(TourDetailEvent.NavigateToBooking)
                         }
                     }
                     .onFailure { error ->
                         emit(
                             TourDetailPartialState.Error(
                                 "Failed to join tour: ${
-                                    error.msg.asString(
-                                        context.resources
-                                    )
+                                    error.msg.asString(context.resources)
                                 }"
                             )
                         )
@@ -97,17 +100,47 @@ class TourDetailViewModel @Inject constructor(
             }
 
             TourDetailIntent.StartTour -> {
+                val tour = uiStateSnapshot.value.tour
+
+                if (tour?.status != TourStatus.READY_TO_START) {
+                    emit(TourDetailPartialState.Error("Tour is not ready to start"))
+                    return@flow
+                }
+
+                if (!tour.isJoined) {
+                    emit(TourDetailPartialState.Error("You must join the tour first"))
+                    return@flow
+                }
+
+                emit(TourDetailPartialState.StartingTour)
+
                 tourAnalytics.trackEvent(
-                    "tour_started_from_detail",
-                    mapOf("tour_id" to tourId)
+                    "tour_manually_started",
+                    mapOf(
+                        "tour_id" to tourId,
+                        "start_method" to "detail_page"
+                    )
                 )
 
-                val tour = uiStateSnapshot.value.tour
-                if (tour?.isJoined == true) {
-                    publishEvent(TourDetailEvent.NavigateToLiveTour)
-                } else {
-                    emit(TourDetailPartialState.Error("You must join the tour first"))
-                }
+                startTourUseCase(tourId)
+                    .onSuccess {
+                        tourAnalytics.trackEvent(
+                            "tour_started_successfully",
+                            mapOf("tour_id" to tourId)
+                        )
+
+                        emit(TourDetailPartialState.TourStarted)
+                        publishEvent(TourDetailEvent.NavigateToLiveTour)
+                    }
+                    .onFailure { error ->
+                        emit(
+                            TourDetailPartialState.Error(
+                                "Failed to start tour: ${
+                                    error.msg.asString(context.resources)
+                                }"
+                            )
+                        )
+                    }
             }
 
             TourDetailIntent.ShareTour -> {
@@ -124,7 +157,7 @@ class TourDetailViewModel @Inject constructor(
                 getTourByIdUseCase(tourId)
                     .onSuccess { tour ->
                         val isJoined = uiStateSnapshot.value.tour?.isJoined ?: false
-                        emit(TourDetailPartialState.TourLoaded(tour.toTourDetail(isJoined = isJoined)))
+                        emit(TourDetailPartialState.TourLoaded(tour.copy(isJoined = isJoined)))
                     }
                     .onFailure { error ->
                         emit(
@@ -185,6 +218,20 @@ class TourDetailViewModel @Inject constructor(
             is TourDetailPartialState.UserLocationRetrieved -> previousState.copy(
                 userLocation = partialState.location
             )
+
+            is TourDetailPartialState.TourReadyToStart -> previousState.copy(
+                isJoining = false
+            )
+
+            is TourDetailPartialState.StartingTour -> previousState.copy(
+                isStarting = true,
+                error = null
+            )
+
+            is TourDetailPartialState.TourStarted -> previousState.copy(
+                isStarting = false,
+                tour = previousState.tour?.copy(isManuallyStarted = true)
+            )
         }
     }
 
@@ -194,7 +241,7 @@ class TourDetailViewModel @Inject constructor(
         getTourByIdUseCase(tourId)
             .onSuccess { tour ->
                 val isJoined = checkIfUserJoinedTour()
-                emit(TourDetailPartialState.TourLoaded(tour.toTourDetail(isJoined = isJoined)))
+                emit(TourDetailPartialState.TourLoaded(tour.copy(isJoined = isJoined)))
             }
             .onFailure { error ->
                 emit(
@@ -234,22 +281,46 @@ class TourDetailViewModel @Inject constructor(
 
 // States
 data class TourDetailUiState(
-    val tour: TourDetail? = null,
+    val tour: Tour? = null,
     val isLoading: Boolean = false,
     val isJoining: Boolean = false,
     val error: String? = null,
-    val userLocation: Location? = null
-)
+    val userLocation: Location? = null,
+    val isStarting: Boolean = false, // Add this for start tour loading state
+) {
+    val canJoinTour: Boolean
+        get() = tour?.let {
+            !it.isJoined && it.status in listOf(
+                TourStatus.UPCOMING,
+                TourStatus.READY_TO_START
+            )
+        } ?: false
+
+    val canStartTour: Boolean
+        get() = tour?.let {
+            it.isJoined && it.status == TourStatus.READY_TO_START
+        } ?: false
+
+    val showLiveBadge: Boolean
+        get() = tour?.status == TourStatus.ACTIVE
+
+    val showReadyBadge: Boolean
+        get() = tour?.status == TourStatus.READY_TO_START
+}
 
 sealed interface TourDetailPartialState {
     data object Loading : TourDetailPartialState
-    data class TourLoaded(val tour: TourDetail) : TourDetailPartialState
+    data class TourLoaded(val tour: Tour) : TourDetailPartialState
     data object JoiningTour : TourDetailPartialState
     data object TourJoined : TourDetailPartialState
     data class JoinedStatusUpdated(val isJoined: Boolean) : TourDetailPartialState
     data object TourShared : TourDetailPartialState
     data class Error(val message: String) : TourDetailPartialState
     data class UserLocationRetrieved(val location: Location) : TourDetailPartialState
+
+    data object TourReadyToStart : TourDetailPartialState
+    data object StartingTour : TourDetailPartialState
+    data object TourStarted : TourDetailPartialState
 }
 
 sealed interface TourDetailIntent {

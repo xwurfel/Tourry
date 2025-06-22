@@ -408,40 +408,14 @@ private fun TourActionFab(
     uiState: LiveTourUiState,
     onIntent: (LiveTourIntent) -> Unit
 ) {
-    when (uiState.tourStatus) {
-        TourStatus.PREPARING -> {
-            // No FAB during preparation
-        }
-
-        TourStatus.ACTIVE -> {
-            if (uiState.canComplete) {
-                FloatingActionButton(
-                    onClick = { onIntent(LiveTourIntent.CompleteTour) },
-                    containerColor = MaterialTheme.colorScheme.primary
-                ) {
-                    Icon(Icons.Default.CheckCircle, contentDescription = "Complete tour")
-                }
-            } else {
-                FloatingActionButton(
-                    onClick = { onIntent(LiveTourIntent.PauseTour) },
-                    containerColor = MaterialTheme.colorScheme.surface
-                ) {
-                    Icon(Icons.Default.Pause, contentDescription = "Pause tour")
-                }
-            }
-        }
-
-        TourStatus.PAUSED -> {
+    if (uiState.tourStatus == TourStatus.ACTIVE) {
+        if (uiState.canComplete) {
             FloatingActionButton(
-                onClick = { onIntent(LiveTourIntent.ResumeTour) },
+                onClick = { onIntent(LiveTourIntent.CompleteTour) },
                 containerColor = MaterialTheme.colorScheme.primary
             ) {
-                Icon(Icons.Default.PlayArrow, contentDescription = "Resume tour")
+                Icon(Icons.Default.CheckCircle, contentDescription = "Complete tour")
             }
-        }
-
-        TourStatus.COMPLETED -> {
-            // Tour completed, no FAB needed
         }
     }
 }
@@ -489,27 +463,30 @@ private fun TourStatusIndicator(
         modifier = modifier.padding(16.dp),
         shape = RoundedCornerShape(16.dp),
         color = when (status) {
-            TourStatus.PREPARING -> MaterialTheme.colorScheme.surfaceVariant
+            TourStatus.UPCOMING -> MaterialTheme.colorScheme.surfaceVariant
             TourStatus.ACTIVE -> MaterialTheme.colorScheme.primary
-            TourStatus.PAUSED -> MaterialTheme.colorScheme.secondary
             TourStatus.COMPLETED -> MaterialTheme.colorScheme.tertiary
+            TourStatus.READY_TO_START -> MaterialTheme.colorScheme.background
+            TourStatus.CANCELLED -> MaterialTheme.colorScheme.errorContainer
         }
     ) {
         Text(
             text = when (status) {
-                TourStatus.PREPARING -> "PREPARING"
+                TourStatus.UPCOMING -> "PREPARING"
                 TourStatus.ACTIVE -> "LIVE"
-                TourStatus.PAUSED -> "PAUSED"
                 TourStatus.COMPLETED -> "COMPLETED"
+                TourStatus.READY_TO_START -> "READY TO START"
+                TourStatus.CANCELLED -> "CANCELLED"
             },
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.Bold,
             color = when (status) {
-                TourStatus.PREPARING -> MaterialTheme.colorScheme.onSurfaceVariant
+                TourStatus.UPCOMING -> MaterialTheme.colorScheme.onSurfaceVariant
                 TourStatus.ACTIVE -> MaterialTheme.colorScheme.onPrimary
-                TourStatus.PAUSED -> MaterialTheme.colorScheme.onSecondary
                 TourStatus.COMPLETED -> MaterialTheme.colorScheme.onTertiary
+                TourStatus.READY_TO_START -> MaterialTheme.colorScheme.onBackground
+                TourStatus.CANCELLED -> MaterialTheme.colorScheme.onErrorContainer
             }
         )
     }

@@ -116,12 +116,6 @@ class LiveTourViewModel @Inject constructor(
                 }
             }
 
-            LiveTourIntent.PauseTour -> {
-                tourAnalytics.trackTourPaused(tourId, "user_action")
-                locationManager.stopLocationUpdates()
-                emit(LiveTourPartialState.TourPaused)
-            }
-
             LiveTourIntent.ResumeTour -> {
                 locationManager.startLocationUpdates()
                 tourAnalytics.trackTourResumed(tourId)
@@ -203,9 +197,6 @@ class LiveTourViewModel @Inject constructor(
                 checkAndHandleRouteDeviation(updatedState, partialState.location)
             }
 
-            LiveTourPartialState.TourPaused -> previousState.copy(
-                tourStatus = TourStatus.PAUSED
-            )
 
             LiveTourPartialState.TourResumed -> previousState.copy(
                 tourStatus = TourStatus.ACTIVE
@@ -586,7 +577,7 @@ data class LiveTourUiState(
     val currentStopIndex: Int = 0,
     val currentStop: LiveTourStop? = null,
     val userLocation: UserLocation? = null,
-    val tourStatus: TourStatus = TourStatus.PREPARING,
+    val tourStatus: TourStatus = TourStatus.UPCOMING,
     val progress: Float = 0f,
     val visitedStopsCount: Int = 0,
     val isLocationEnabled: Boolean = false,
@@ -622,7 +613,6 @@ sealed interface LiveTourPartialState {
 
     data class LocationUpdated(val location: UserLocation) : LiveTourPartialState
 
-    data object TourPaused : LiveTourPartialState
     data object TourResumed : LiveTourPartialState
     data object TourCompleted : LiveTourPartialState
 
@@ -643,7 +633,6 @@ sealed interface LiveTourPartialState {
 // Intents
 sealed interface LiveTourIntent {
     data object StartLocationTracking : LiveTourIntent
-    data object PauseTour : LiveTourIntent
     data object ResumeTour : LiveTourIntent
     data object CompleteTour : LiveTourIntent
     data object ExitTour : LiveTourIntent

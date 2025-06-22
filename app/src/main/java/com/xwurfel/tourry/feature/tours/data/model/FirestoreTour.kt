@@ -25,6 +25,11 @@ data class FirestoreTour(
     @PropertyName("stops") val stops: List<FirestoreTourStop> = emptyList(),
     @PropertyName("tags") val tags: List<String> = emptyList(),
     @PropertyName("createdAt") val createdAt: Timestamp = Timestamp.now(),
-    @PropertyName("updatedAt") val updatedAt: Timestamp = Timestamp.now()
+    @PropertyName("updatedAt") val updatedAt: Timestamp = Timestamp.now(),
+    @PropertyName("isManuallyStarted") val isManuallyStarted: Boolean = false,
+    @PropertyName("manuallyStartedAt") val manuallyStartedAt: Timestamp? = null,
+    @PropertyName("manuallyStartedBy") val manuallyStartedBy: String? = null, // User ID who started the tour
+    @PropertyName("isCompleted") val isCompleted: Boolean = false,
+    @PropertyName("completedAt") val completedAt: Timestamp? = null,
 )
 

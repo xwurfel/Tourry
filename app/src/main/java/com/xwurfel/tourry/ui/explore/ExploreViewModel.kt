@@ -80,9 +80,7 @@ class ExploreViewModel @Inject constructor(
                 emit(ExplorePartialState.Loading)
             }
 
-            is ExploreIntent.JoinTour -> {
-                handleJoinTour(intent.tourId)
-            }
+            is ExploreIntent.JoinTour -> handleJoinTour(intent.tourId)
         }
     }
 

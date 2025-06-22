@@ -50,7 +50,7 @@ import coil.compose.AsyncImage
 import com.xwurfel.tourry.R
 import com.xwurfel.tourry.core.extension.collectWithLifecycle
 import com.xwurfel.tourry.feature.tours.domain.model.MyTour
-import com.xwurfel.tourry.feature.tours.domain.model.MyTourStatus
+import com.xwurfel.tourry.feature.tours.domain.model.TourStatus
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -268,9 +268,11 @@ fun MyTourCard(
                     // Status badge
                     Surface(
                         color = when (tour.status) {
-                            MyTourStatus.LIVE -> MaterialTheme.colorScheme.error
-                            MyTourStatus.UPCOMING -> MaterialTheme.colorScheme.primary
-                            MyTourStatus.COMPLETED -> MaterialTheme.colorScheme.surfaceVariant
+                            TourStatus.ACTIVE -> MaterialTheme.colorScheme.error
+                            TourStatus.UPCOMING -> MaterialTheme.colorScheme.primary
+                            TourStatus.COMPLETED -> MaterialTheme.colorScheme.surfaceVariant
+                            TourStatus.READY_TO_START -> MaterialTheme.colorScheme.background
+                            TourStatus.CANCELLED -> MaterialTheme.colorScheme.errorContainer
                         },
                         shape = MaterialTheme.shapes.small
                     ) {
@@ -279,9 +281,11 @@ fun MyTourCard(
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                             style = MaterialTheme.typography.labelSmall,
                             color = when (tour.status) {
-                                MyTourStatus.LIVE -> MaterialTheme.colorScheme.onError
-                                MyTourStatus.UPCOMING -> MaterialTheme.colorScheme.onPrimary
-                                MyTourStatus.COMPLETED -> MaterialTheme.colorScheme.onSurfaceVariant
+                                TourStatus.ACTIVE -> MaterialTheme.colorScheme.onError
+                                TourStatus.UPCOMING -> MaterialTheme.colorScheme.onPrimary
+                                TourStatus.COMPLETED -> MaterialTheme.colorScheme.onSurfaceVariant
+                                TourStatus.READY_TO_START -> MaterialTheme.colorScheme.onBackground
+                                TourStatus.CANCELLED -> MaterialTheme.colorScheme.onErrorContainer
                             },
                             fontWeight = FontWeight.Bold
                         )
@@ -347,7 +351,7 @@ fun MyTourCard(
             }
 
             // Management options
-            if (showManagementOptions && tour.status == MyTourStatus.UPCOMING) {
+            if (showManagementOptions && tour.status == TourStatus.UPCOMING) {
                 HorizontalDivider()
                 Row(
                     modifier = Modifier

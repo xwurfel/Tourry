@@ -67,4 +67,14 @@ interface TourRepository {
         completionPercentage: Float,
         totalDuration: Long
     ): DomainResult<Unit>
+
+    /**
+     * Manually starts a tour, marking it as live
+     */
+    suspend fun startTour(tourId: String, userId: String): DomainResult<Unit>
+
+    /**
+     * Completes a tour for a specific user
+     */
+    suspend fun completeTour(tourId: String, userId: String): DomainResult<Unit>
 }

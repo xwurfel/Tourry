@@ -13,7 +13,6 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.google.android.gms.maps.MapsInitializer
 import com.xwurfel.tourry.core.di.IoDispatcher
-import com.xwurfel.tourry.feature.mock.MigrationHelper
 import com.xwurfel.tourry.feature.profile.domain.usecase.ObserveAuthenticationStateUseCase
 import com.xwurfel.tourry.ui.splash.SplashViewModel
 import com.xwurfel.tourry.ui.theme.TourryTheme
@@ -32,9 +31,6 @@ class MainActivity : ComponentActivity() {
     lateinit var observeAuthenticationStateUseCase: ObserveAuthenticationStateUseCase
 
     @Inject
-    lateinit var migrationHelper: MigrationHelper
-
-    @Inject
     @IoDispatcher
     lateinit var ioDispatcher: CoroutineDispatcher
 
@@ -50,20 +46,6 @@ class MainActivity : ComponentActivity() {
         MapsInitializer.initialize(applicationContext)
 
         setupSplashScreen(splashScreen)
-
-//        lifecycleScope.launch(ioDispatcher) {
-//            val result = async { migrationHelper.migrateMockToursToFirebase() }
-//            result.await()
-//            val verify = migrationHelper.verifyMigration()
-//            verify.fold(
-//                onSuccess = {
-//                    Timber.tag("DEG").d(it)
-//                },
-//                onFailure = {
-//                    Timber.tag("DEG").e(it)
-//                }
-//            )
-//        }
 
         setContent {
             TourryTheme {

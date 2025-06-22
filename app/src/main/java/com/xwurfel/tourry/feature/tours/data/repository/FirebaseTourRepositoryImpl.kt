@@ -20,6 +20,7 @@ import com.xwurfel.tourry.feature.tours.domain.model.StopContent
 import com.xwurfel.tourry.feature.tours.domain.model.Tour
 import com.xwurfel.tourry.feature.tours.domain.model.TourParticipation
 import com.xwurfel.tourry.feature.tours.domain.repository.TourRepository
+import com.xwurfel.tourry.feature.tours.domain.usecase.TourStatusHelper
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -52,14 +53,9 @@ class FirebaseTourRepositoryImpl @Inject constructor(
                     return@addSnapshotListener
                 }
 
-                val currentTime = System.currentTimeMillis()
                 val tours = snapshot?.documents?.mapNotNull { doc ->
                     doc.toObject<FirestoreTour>()?.copy(id = doc.id)?.let { firestoreTour ->
-                        val startTime = firestoreTour.startTime.toDate().time
-                        val isLiveSoon =
-                            startTime - currentTime in 0..3600000 // 1 hour in milliseconds
-
-                        TourMapper.toDomain(firestoreTour.copy(isLive = isLiveSoon))
+                        TourMapper.toDomain(firestoreTour)
                     }
                 } ?: emptyList()
 
@@ -72,7 +68,7 @@ class FirebaseTourRepositoryImpl @Inject constructor(
     override fun observeToursByAuthor(authorId: String): Flow<List<Tour>> = callbackFlow {
         val listener = firestore.collection(TOURS_COLLECTION)
             .whereEqualTo("authorId", authorId)
-          //  .orderBy("createdAt", Query.Direction.DESCENDING)
+            //  .orderBy("createdAt", Query.Direction.DESCENDING)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
                     Timber.e(error, "Error observing tours by author")
@@ -592,5 +588,67 @@ class FirebaseTourRepositoryImpl @Inject constructor(
         } catch (_: Exception) {
             DomainResult.Failure(DomainError.SomethingWentWrongError())
         }
+    }
+
+    override suspend fun startTour(tourId: String, userId: String): DomainResult<Unit> = result {
+        val currentUser = auth.currentUser ?: throw Exception("User not authenticated")
+
+        // Verify the user is the one requesting to start
+        if (currentUser.uid != userId) {
+            throw Exception("Unauthorized to start tour for another user")
+        }
+
+        // Get the tour to validate it can be started
+        val tourDoc = firestore.collection(TOURS_COLLECTION)
+            .document(tourId)
+            .get()
+            .await()
+
+        val tour = tourDoc.toObject<FirestoreTour>()
+            ?: throw Exception("Tour not found")
+
+        // Validate the tour can be started
+        val domainTour = TourMapper.toDomain(tour)
+        if (!TourStatusHelper.canStartTour(
+                status = domainTour.status,
+                isUserJoined = true, // Assume this check is done at higher level
+                startTime = domainTour.startTime
+            )
+        ) {
+            throw Exception("Tour cannot be started at this time")
+        }
+
+        // Update the tour to mark it as manually started
+        val updateData = mapOf(
+            "isManuallyStarted" to true,
+            "manuallyStartedAt" to com.google.firebase.Timestamp.now(),
+            "manuallyStartedBy" to userId,
+            "updatedAt" to com.google.firebase.Timestamp.now()
+        )
+
+        firestore.collection(TOURS_COLLECTION)
+            .document(tourId)
+            .update(updateData)
+            .await()
+    }
+
+    override suspend fun completeTour(tourId: String, userId: String): DomainResult<Unit> = result {
+        val currentUser = auth.currentUser ?: throw Exception("User not authenticated")
+
+        if (currentUser.uid != userId) {
+            throw Exception("Unauthorized to complete tour for another user")
+        }
+
+        // Mark tour as completed (this could be per-user or global depending on requirements)
+        val updateData = mapOf(
+            "isCompleted" to true,
+            "completedAt" to com.google.firebase.Timestamp.now(),
+            "updatedAt" to com.google.firebase.Timestamp.now()
+        )
+
+        firestore.collection(TOURS_COLLECTION)
+            .document(tourId)
+            .update(updateData)
+            .await()
     }
 }

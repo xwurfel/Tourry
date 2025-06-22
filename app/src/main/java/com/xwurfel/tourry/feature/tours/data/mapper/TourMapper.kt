@@ -39,11 +39,17 @@ object TourMapper {
             rating = firestoreTour.rating,
             reviewsCount = firestoreTour.reviewsCount,
             isActive = firestoreTour.isActive,
-            isLive = firestoreTour.isLive,
             stops = firestoreTour.stops.map { toDomain(it) },
             tags = firestoreTour.tags,
             createdAt = firestoreTour.createdAt.toDate().time,
-            updatedAt = firestoreTour.updatedAt.toDate().time
+            updatedAt = firestoreTour.updatedAt.toDate().time,
+            isManuallyStarted = firestoreTour.isManuallyStarted,
+            manuallyStartedAt = firestoreTour.manuallyStartedAt?.toDate()?.time,
+            manuallyStartedBy = firestoreTour.manuallyStartedBy,
+            isCompleted = firestoreTour.isCompleted,
+            completedAt = firestoreTour.completedAt?.toDate()?.time,
+            isJoined = false,
+            spotsLeft = null
         )
     }
 
@@ -69,7 +75,7 @@ object TourMapper {
             stops = createRequest.stops.map { toFirestore(it) },
             tags = createRequest.tags,
             createdAt = Timestamp.now(),
-            updatedAt = Timestamp.now()
+            updatedAt = Timestamp.now(),
         )
     }
 
