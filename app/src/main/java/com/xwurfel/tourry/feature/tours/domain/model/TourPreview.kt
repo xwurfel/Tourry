@@ -1,5 +1,7 @@
 package com.xwurfel.tourry.feature.tours.domain.model
 
+import com.google.android.gms.maps.model.LatLng
+
 // Data models remain the same
 data class TourPreview(
     val id: String,
@@ -12,5 +14,6 @@ data class TourPreview(
     val isLiveSoon: Boolean,
     val startTime: Long,
     val duration: Int, // in minutes
-    val distance: Float? = null // in km
+    val distance: Float? = null, // in km
+    val coordinates: LatLng,
 )

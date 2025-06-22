@@ -187,10 +187,7 @@ fun TourMapView(
         tours.forEach { tour ->
             Marker(
                 state = MarkerState(
-                    position = LatLng(
-                        48.8566 + (tours.indexOf(tour) * 0.01),
-                        2.3522 + (tours.indexOf(tour) * 0.01)
-                    )
+                    position = tour.coordinates
                 ),
                 title = tour.title,
                 snippet = if (tour.isFree) "Free" else "$${tour.price.toInt()}",

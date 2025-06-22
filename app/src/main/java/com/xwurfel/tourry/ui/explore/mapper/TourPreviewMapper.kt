@@ -1,5 +1,6 @@
 package com.xwurfel.tourry.ui.explore.mapper
 
+import com.google.android.gms.maps.model.LatLng
 import com.xwurfel.tourry.feature.tours.domain.model.Tour
 import com.xwurfel.tourry.feature.tours.domain.model.TourPreview
 
@@ -17,7 +18,11 @@ object TourPreviewMapper {
             isLiveSoon = isLive,
             startTime = startTime,
             duration = duration,
-            distance = distance
+            distance = distance,
+            coordinates = LatLng(
+                stops.first().latitude,
+                stops.first().longitude
+            )
         )
     }
 

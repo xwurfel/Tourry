@@ -444,7 +444,7 @@ private fun TourProgressOverlay(
             )
 
             LinearProgressIndicator(
-                progress = { progress },
+                progress = { progress.coerceIn(0f, 100f) },
                 drawStopIndicator = {},
                 modifier = Modifier.width(120.dp),
                 color = MaterialTheme.colorScheme.primary,

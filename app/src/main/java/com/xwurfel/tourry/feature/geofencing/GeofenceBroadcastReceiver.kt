@@ -7,6 +7,9 @@ import android.location.Location
 import com.google.android.gms.location.Geofence
 import com.google.android.gms.location.GeofencingEvent
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
 
@@ -33,22 +36,24 @@ class GeofenceBroadcastReceiver : BroadcastReceiver() {
         val triggeringGeofences = geofencingEvent.triggeringGeofences ?: return
         val location = geofencingEvent.triggeringLocation
 
-        when (geofenceTransition) {
-            Geofence.GEOFENCE_TRANSITION_ENTER -> {
-                handleGeofenceEnter(triggeringGeofences, location)
-            }
+        CoroutineScope(SupervisorJob()).launch {
+            when (geofenceTransition) {
+                Geofence.GEOFENCE_TRANSITION_ENTER -> {
+                    handleGeofenceEnter(triggeringGeofences, location)
+                }
 
-            Geofence.GEOFENCE_TRANSITION_EXIT -> {
-                handleGeofenceExit(triggeringGeofences, location)
-            }
+                Geofence.GEOFENCE_TRANSITION_EXIT -> {
+                    handleGeofenceExit(triggeringGeofences, location)
+                }
 
-            else -> {
-                Timber.Forest.tag(TAG).w("Unexpected geofence transition: $geofenceTransition")
+                else -> {
+                    Timber.Forest.tag(TAG).w("Unexpected geofence transition: $geofenceTransition")
+                }
             }
         }
     }
 
-    private fun handleGeofenceEnter(geofences: List<Geofence>, location: Location?) {
+    private suspend fun handleGeofenceEnter(geofences: List<Geofence>, location: Location?) {
         geofences.forEach { geofence ->
             Timber.Forest.tag(TAG).d("Entered geofence: ${geofence.requestId}")
             geofencingManager.handleGeofenceEvent(
@@ -57,7 +62,7 @@ class GeofenceBroadcastReceiver : BroadcastReceiver() {
         }
     }
 
-    private fun handleGeofenceExit(geofences: List<Geofence>, location: Location?) {
+    private suspend fun handleGeofenceExit(geofences: List<Geofence>, location: Location?) {
         geofences.forEach { geofence ->
             Timber.Forest.tag(TAG).d("Exited geofence: ${geofence.requestId}")
             geofencingManager.handleGeofenceEvent(
