@@ -18,7 +18,7 @@ import com.xwurfel.tourry.feature.tours.domain.model.LiveTourStop
 import com.xwurfel.tourry.feature.tours.domain.model.RouteDeviation
 import com.xwurfel.tourry.feature.tours.domain.model.TourStatus
 import com.xwurfel.tourry.feature.tours.domain.usecase.CompleteTourSessionUseCase
-import com.xwurfel.tourry.feature.tours.domain.usecase.GetLiveTourUseCase
+import com.xwurfel.tourry.feature.tours.domain.usecase.GetTourByIdUseCase
 import com.xwurfel.tourry.feature.tours.domain.usecase.RecordStopVisitUseCase
 import com.xwurfel.tourry.feature.tours.domain.usecase.StartTourSessionUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -38,7 +38,7 @@ class LiveTourViewModel @Inject constructor(
     private val geofencingManager: GeofencingManager,
     private val audioPlayerManager: AudioPlayerManager,
     private val tourAnalytics: TourAnalytics,
-    private val getLiveTourUseCase: GetLiveTourUseCase,
+    private val getTourByIdUseCase: GetTourByIdUseCase,
     private val startTourSessionUseCase: StartTourSessionUseCase,
     private val recordStopVisitUseCase: RecordStopVisitUseCase,
     private val completeTourSessionUseCase: CompleteTourSessionUseCase,
@@ -410,7 +410,7 @@ class LiveTourViewModel @Inject constructor(
     private fun loadTourData(): Flow<LiveTourPartialState> = flow {
         emit(LiveTourPartialState.Loading)
 
-        getLiveTourUseCase(tourId)
+        getTourByIdUseCase(tourId)
             .onSuccess { liveTour ->
                 emit(
                     LiveTourPartialState.TourDataLoaded(
@@ -422,7 +422,7 @@ class LiveTourViewModel @Inject constructor(
                                 latitude = stop.latitude,
                                 longitude = stop.longitude,
                                 order = stop.order,
-                                geofenceRadius = stop.geofenceRadius,
+                                geofenceRadius = 20f,
                                 content = stop.content,
                                 description = stop.description
                             )

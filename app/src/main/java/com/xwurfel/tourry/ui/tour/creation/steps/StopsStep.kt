@@ -49,6 +49,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
@@ -117,10 +118,10 @@ fun StopsStep(
             if (stops.isEmpty()) {
                 Card(
                     modifier = Modifier
-                        .align(Alignment.Center)
+                        .align(BiasAlignment(0f, .8f))
                         .padding(16.dp),
                     colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer
+                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
                     )
                 ) {
                     Text(
