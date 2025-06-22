@@ -83,7 +83,6 @@ import com.xwurfel.tourry.util.permissions.LocationPermissionsHandler
 
 @Composable
 fun LiveTourRoute(
-    tourId: String,
     onTourCompleted: () -> Unit,
     onNavigateBack: () -> Unit,
     viewModel: LiveTourViewModel = hiltViewModel()

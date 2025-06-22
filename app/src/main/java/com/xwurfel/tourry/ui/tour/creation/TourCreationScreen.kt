@@ -45,7 +45,6 @@ import com.xwurfel.tourry.ui.tour.creation.steps.StopsStep
 
 @Composable
 fun TourCreationRoute(
-    editingTourId: String?,
     onNavigateBack: () -> Unit,
     onTourCreated: (String) -> Unit,
     viewModel: TourCreationViewModel = hiltViewModel()
@@ -157,6 +156,7 @@ fun TourCreationScreen(
                     )
 
                     1 -> StopsStep(
+                        userLocation = uiState.userLocation,
                         stops = uiState.stops,
                         onAddStop = { onIntent(TourCreationIntent.AddStop(it)) },
                         onUpdateStop = { index, stop ->
@@ -178,6 +178,7 @@ fun TourCreationScreen(
                     )
 
                     3 -> PreviewStep(
+                        userLocation = uiState.userLocation,
                         title = uiState.title,
                         theme = uiState.theme,
                         description = uiState.description,

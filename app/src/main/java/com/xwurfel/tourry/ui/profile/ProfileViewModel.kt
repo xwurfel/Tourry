@@ -1,5 +1,6 @@
 package com.xwurfel.tourry.ui.profile
 
+import android.content.Context
 import com.xwurfel.tourry.core.domain.util.onFailure
 import com.xwurfel.tourry.core.domain.util.onSuccess
 import com.xwurfel.tourry.core.ui.MviViewModel
@@ -13,6 +14,7 @@ import com.xwurfel.tourry.feature.profile.domain.usecase.ObserveUserStatsUseCase
 import com.xwurfel.tourry.feature.profile.domain.usecase.SignOutUseCase
 import com.xwurfel.tourry.feature.profile.domain.usecase.UpdateUserSettingsUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flow
@@ -26,6 +28,7 @@ class ProfileViewModel @Inject constructor(
     private val observeUserSettingsUseCase: ObserveUserSettingsUseCase,
     private val signOutUseCase: SignOutUseCase,
     private val updateUserSettingsUseCase: UpdateUserSettingsUseCase,
+    @ApplicationContext private val context: Context,
 ) : MviViewModel<ProfileUiState, ProfilePartialState, ProfileEvent, ProfileIntent>(
     initialState = ProfileUiState()
 ) {
@@ -59,7 +62,13 @@ class ProfileViewModel @Inject constructor(
                     emit(ProfilePartialState.Loading(false))
                 }.onFailure { error ->
                     emit(ProfilePartialState.Loading(false))
-                    emit(ProfilePartialState.Error(error.msg.toString()))
+                    emit(
+                        ProfilePartialState.Error(
+                            error.msg.asString(
+                                context.resources
+                            )
+                        )
+                    )
                 }
             }
 
@@ -68,7 +77,13 @@ class ProfileViewModel @Inject constructor(
                 val updatedSettings = currentSettings.copy(notificationsEnabled = intent.enabled)
 
                 updateUserSettingsUseCase(updatedSettings).onFailure { error ->
-                    emit(ProfilePartialState.Error(error.msg.toString()))
+                    emit(
+                        ProfilePartialState.Error(
+                            error.msg.asString(
+                                context.resources
+                            )
+                        )
+                    )
                 }
             }
 
@@ -78,7 +93,13 @@ class ProfileViewModel @Inject constructor(
                     currentSettings.copy(locationPermissionGranted = intent.granted)
 
                 updateUserSettingsUseCase(updatedSettings).onFailure { error ->
-                    emit(ProfilePartialState.Error(error.msg.toString()))
+                    emit(
+                        ProfilePartialState.Error(
+                            error.msg.asString(
+                                context.resources
+                            )
+                        )
+                    )
                 }
             }
 

@@ -1,5 +1,6 @@
 package com.xwurfel.tourry.ui.explore
 
+import android.location.Location
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -138,6 +139,7 @@ fun ExploreScreen(
                 if (uiState.isMapMode) {
                     // Map View
                     TourMapView(
+                        uiState.userLocation,
                         tours = uiState.tours,
                         onTourClick = { tourId -> onIntent(ExploreIntent.TourClicked(tourId)) }
                     )
@@ -158,12 +160,15 @@ fun ExploreScreen(
 
 @Composable
 fun TourMapView(
+    userLocation: Location?,
     tours: List<TourPreview>,
     onTourClick: (String) -> Unit
 ) {
     val cameraPositionState = rememberCameraPositionState {
         position = CameraPosition.fromLatLngZoom(
-            LatLng(48.8566, 2.3522),
+            userLocation?.let {
+                LatLng(userLocation.latitude, userLocation.longitude)
+            } ?: LatLng(48.8566, 2.3522),
             12f
         )
     }

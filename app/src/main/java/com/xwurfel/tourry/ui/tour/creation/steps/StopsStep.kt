@@ -1,5 +1,6 @@
 package com.xwurfel.tourry.ui.tour.creation.steps
 
+import android.location.Location
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -63,9 +64,10 @@ import com.google.maps.android.compose.rememberCameraPositionState
 import com.xwurfel.tourry.feature.tours.domain.model.CreationTourStop
 import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class)
+
 @Composable
 fun StopsStep(
+    userLocation: Location?,
     stops: List<CreationTourStop>,
     onAddStop: (CreationTourStop) -> Unit,
     onUpdateStop: (Int, CreationTourStop) -> Unit,
@@ -88,7 +90,9 @@ fun StopsStep(
                     if (stops.isNotEmpty())
                         LatLng(stops.first().latitude, stops.first().longitude)
                     else
-                        LatLng(48.8566, 2.3522),
+                        userLocation?.let {
+                            LatLng(userLocation.latitude, userLocation.longitude)
+                        } ?: LatLng(48.8566, 2.3522),
                     12f
                 )
             }

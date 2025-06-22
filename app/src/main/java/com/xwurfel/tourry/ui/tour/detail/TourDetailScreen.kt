@@ -64,7 +64,6 @@ import java.util.Locale
 
 @Composable
 fun TourDetailRoute(
-    tourId: String,
     onNavigateBack: () -> Unit,
     onNavigateToLiveTour: () -> Unit,
     onNavigateToBooking: () -> Unit,
@@ -358,7 +357,10 @@ fun TourDetailScreen(
                                 modifier = Modifier.fillMaxSize(),
                                 cameraPositionState = rememberCameraPositionState {
                                     position = CameraPosition.fromLatLngZoom(
-                                        LatLng(48.8566, 2.3522), 13f
+                                        uiState.userLocation?.let {
+                                            LatLng(it.latitude, it.longitude)
+                                        } ?: LatLng(48.8566, 2.3522),
+                                        12f
                                     )
                                 }
                             ) {

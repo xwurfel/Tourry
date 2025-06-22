@@ -1,5 +1,6 @@
 package com.xwurfel.tourry.ui.tour.summary
 
+import android.content.Context
 import androidx.lifecycle.SavedStateHandle
 import com.xwurfel.tourry.core.domain.util.getOrNull
 import com.xwurfel.tourry.core.domain.util.onFailure
@@ -13,6 +14,7 @@ import com.xwurfel.tourry.feature.tours.domain.usecase.SubmitTourReviewUseCase
 import com.xwurfel.tourry.ui.tour.summary.mapper.TourSummaryMapper.toSummaryData
 import com.xwurfel.tourry.ui.tour.summary.mapper.TourSummaryMapper.toUiTourStats
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import javax.inject.Inject
@@ -23,7 +25,8 @@ class TourSummaryViewModel @Inject constructor(
     private val getTourByIdUseCase: GetTourByIdUseCase,
     private val getTourStatsUseCase: GetTourStatsUseCase,
     private val submitTourReviewUseCase: SubmitTourReviewUseCase,
-    private val tourAnalytics: TourAnalytics
+    private val tourAnalytics: TourAnalytics,
+    @ApplicationContext private val context: Context,
 ) : MviViewModel<TourSummaryUiState, TourSummaryPartialState, TourSummaryEvent, TourSummaryIntent>(
     initialState = TourSummaryUiState()
 ) {
@@ -58,7 +61,15 @@ class TourSummaryViewModel @Inject constructor(
                     )
                     emit(TourSummaryPartialState.RatingSubmitted)
                 }.onFailure { error ->
-                    emit(TourSummaryPartialState.Error("Failed to submit rating: ${error.msg}"))
+                    emit(
+                        TourSummaryPartialState.Error(
+                            "Failed to submit rating: ${
+                                error.msg.asString(
+                                    context.resources
+                                )
+                            }"
+                        )
+                    )
                 }
             }
 
@@ -87,7 +98,15 @@ class TourSummaryViewModel @Inject constructor(
                     tourAnalytics.trackUserFeedback(tourId, rating, intent.feedback)
                     emit(TourSummaryPartialState.FeedbackSubmitted)
                 }.onFailure { error ->
-                    emit(TourSummaryPartialState.Error("Failed to submit feedback: ${error.msg}"))
+                    emit(
+                        TourSummaryPartialState.Error(
+                            "Failed to submit feedback: ${
+                                error.msg.asString(
+                                    context.resources
+                                )
+                            }"
+                        )
+                    )
                 }
             }
 

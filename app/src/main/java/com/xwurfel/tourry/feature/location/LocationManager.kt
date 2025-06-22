@@ -1,6 +1,7 @@
 package com.xwurfel.tourry.feature.location
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -9,6 +10,7 @@ import android.content.pm.PackageManager
 import android.location.Location
 import android.os.IBinder
 import androidx.core.app.ActivityCompat
+import com.google.android.gms.location.FusedLocationProviderClient
 import com.xwurfel.tourry.feature.location.service.LocationService
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.channels.awaitClose
@@ -17,13 +19,15 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.tasks.await
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 class LocationManager @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val fusedLocationClient: FusedLocationProviderClient
 ) {
     private var locationService: LocationService? = null
     private var isServiceBound = false
@@ -182,8 +186,15 @@ class LocationManager @Inject constructor(
     /**
      * Get the last known location if available
      */
-    fun getLastKnownLocation(): Location? {
-        return locationService?.getLastKnownLocation()
+    @SuppressLint("MissingPermission")
+    suspend fun getLastKnownLocation(): Location? {
+        return try {
+            fusedLocationClient.lastLocation.await()
+        } catch (
+            e: Exception
+        ) {
+            null
+        }
     }
 
     /**

@@ -1,5 +1,6 @@
 package com.xwurfel.tourry.ui.tour.creation.steps
 
+import android.location.Location
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -49,6 +50,7 @@ import java.util.Locale
 
 @Composable
 fun PreviewStep(
+    userLocation: Location?,
     title: String,
     theme: TourTheme?,
     description: String,
@@ -286,7 +288,9 @@ fun PreviewStep(
                                 if (stops.isNotEmpty())
                                     LatLng(stops.first().latitude, stops.first().longitude)
                                 else
-                                    LatLng(48.8566, 2.3522),
+                                    userLocation?.let {
+                                        LatLng(userLocation.latitude, userLocation.longitude)
+                                    } ?: LatLng(48.8566, 2.3522),
                                 13f
                             )
                         }

@@ -1,5 +1,6 @@
 package com.xwurfel.tourry.ui.tour.mine
 
+import android.content.Context
 import com.xwurfel.tourry.core.di.IoDispatcher
 import com.xwurfel.tourry.core.domain.util.getOrNull
 import com.xwurfel.tourry.core.domain.util.onFailure
@@ -14,6 +15,7 @@ import com.xwurfel.tourry.feature.tours.domain.usecase.ObserveToursByAuthorUseCa
 import com.xwurfel.tourry.feature.tours.domain.usecase.ObserveUserParticipationsUseCase
 import com.xwurfel.tourry.ui.tour.mine.mapper.MyTourMapper.toMyTour
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -37,6 +39,7 @@ class MyToursViewModel @Inject constructor(
     private val getTourByIdUseCase: GetTourByIdUseCase,
     private val tourRepository: TourRepository,
     @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
+    @ApplicationContext private val context: Context,
 ) : MviViewModel<MyToursUiState, MyToursPartialState, MyToursEvent, MyToursIntent>(
     initialState = MyToursUiState()
 ) {
@@ -73,7 +76,15 @@ class MyToursViewModel @Inject constructor(
                         emit(MyToursPartialState.TourCancelled(intent.tourId))
                     }
                     .onFailure { error ->
-                        emit(MyToursPartialState.Error("Failed to cancel tour: ${error.msg}"))
+                        emit(
+                            MyToursPartialState.Error(
+                                "Failed to cancel tour: ${
+                                    error.msg.asString(
+                                        context.resources
+                                    )
+                                }"
+                            )
+                        )
                     }
             }
 

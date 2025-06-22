@@ -1,5 +1,6 @@
 package com.xwurfel.tourry.ui.auth
 
+import android.content.Context
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInClient
 import com.google.android.gms.common.api.ApiException
@@ -13,6 +14,7 @@ import com.xwurfel.tourry.feature.profile.domain.usecase.SignInWithGoogleUseCase
 import com.xwurfel.tourry.ui.auth.AuthPartialState.AuthSuccess
 import com.xwurfel.tourry.ui.auth.AuthPartialState.Error
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import timber.log.Timber
@@ -25,6 +27,7 @@ class AuthViewModel @Inject constructor(
     private val createAccountUseCase: CreateAccountUseCase,
     private val sendPasswordResetUseCase: SendPasswordResetUseCase,
     private val googleSignInClient: GoogleSignInClient,
+    @ApplicationContext private val context: Context,
 ) : MviViewModel<AuthUiState, AuthPartialState, AuthEvent, AuthIntent>(
     initialState = AuthUiState()
 ) {
@@ -51,7 +54,13 @@ class AuthViewModel @Inject constructor(
                                 publishEvent(AuthEvent.NavigateToMain)
                             }
                             .onFailure { error ->
-                                emit(Error(error.msg.toString()))
+                                emit(
+                                    Error(
+                                        error.msg.asString(
+                                            context.resources
+                                        )
+                                    )
+                                )
                             }
                     } else {
                         emit(Error("Google sign-in failed - no ID token"))
@@ -70,7 +79,13 @@ class AuthViewModel @Inject constructor(
                         publishEvent(AuthEvent.NavigateToMain)
                     }
                     .onFailure { error ->
-                        emit(Error(error.msg.toString()))
+                        emit(
+                            Error(
+                                error.msg.asString(
+                                    context.resources
+                                )
+                            )
+                        )
                     }
             }
 
@@ -82,7 +97,13 @@ class AuthViewModel @Inject constructor(
                         publishEvent(AuthEvent.NavigateToMain)
                     }
                     .onFailure { error ->
-                        emit(Error(error.msg.toString()))
+                        emit(
+                            Error(
+                                error.msg.asString(
+                                    context.resources
+                                )
+                            )
+                        )
                     }
             }
 
@@ -93,7 +114,13 @@ class AuthViewModel @Inject constructor(
                         emit(AuthPartialState.PasswordResetSent)
                     }
                     .onFailure { error ->
-                        emit(Error(error.msg.toString()))
+                        emit(
+                            Error(
+                                error.msg.asString(
+                                    context.resources
+                                )
+                            )
+                        )
                     }
             }
 

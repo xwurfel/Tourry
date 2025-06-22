@@ -1,10 +1,13 @@
 package com.xwurfel.tourry.ui.tour.creation
 
+import android.content.Context
+import android.location.Location
 import androidx.lifecycle.SavedStateHandle
 import com.xwurfel.tourry.core.domain.util.onFailure
 import com.xwurfel.tourry.core.domain.util.onSuccess
 import com.xwurfel.tourry.core.ui.MviViewModel
 import com.xwurfel.tourry.feature.analytics.TourAnalytics
+import com.xwurfel.tourry.feature.location.LocationManager
 import com.xwurfel.tourry.feature.tours.domain.model.CreationTourStop
 import com.xwurfel.tourry.feature.tours.domain.model.TourTheme
 import com.xwurfel.tourry.feature.tours.domain.usecase.CreateTourUseCase
@@ -12,6 +15,7 @@ import com.xwurfel.tourry.feature.tours.domain.usecase.GetTourByIdUseCase
 import com.xwurfel.tourry.feature.tours.domain.usecase.UpdateTourUseCase
 import com.xwurfel.tourry.ui.tour.creation.mapper.TourCreationMapper.toCreateTourRequest
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import javax.inject.Inject
@@ -23,6 +27,8 @@ class TourCreationViewModel @Inject constructor(
     private val updateTourUseCase: UpdateTourUseCase,
     private val getTourByIdUseCase: GetTourByIdUseCase,
     private val tourAnalytics: TourAnalytics,
+    @ApplicationContext private val context: Context,
+    locationManager: LocationManager,
 ) : MviViewModel<TourCreationUiState, TourCreationPartialState, TourCreationEvent, TourCreationIntent>(
     initialState = TourCreationUiState()
 ) {
@@ -67,6 +73,12 @@ class TourCreationViewModel @Inject constructor(
                 }
             )
         }
+        observeContinuousChanges(
+            flow {
+                locationManager.getLastKnownLocation()
+                    ?.let { emit(TourCreationPartialState.UserLocationRetrieved(it)) }
+            }
+        )
     }
 
     override fun mapIntents(intent: TourCreationIntent): Flow<TourCreationPartialState> = flow {
@@ -165,7 +177,15 @@ class TourCreationViewModel @Inject constructor(
                             emit(TourCreationPartialState.Published(newTourId))
                         }
                         .onFailure { error ->
-                            emit(TourCreationPartialState.Error("Failed to publish tour: ${error.msg}"))
+                            emit(
+                                TourCreationPartialState.Error(
+                                    "Failed to publish tour: ${
+                                        error.msg.asString(
+                                            context.resources
+                                        )
+                                    }"
+                                )
+                            )
                         }
                 } catch (e: Exception) {
                     emit(TourCreationPartialState.Error("Failed to publish tour: ${e.message}"))
@@ -199,7 +219,15 @@ class TourCreationViewModel @Inject constructor(
                             emit(TourCreationPartialState.TourUpdated(tourId))
                         }
                         .onFailure { error ->
-                            emit(TourCreationPartialState.Error("Failed to update tour: ${error.msg}"))
+                            emit(
+                                TourCreationPartialState.Error(
+                                    "Failed to update tour: ${
+                                        error.msg.asString(
+                                            context.resources
+                                        )
+                                    }"
+                                )
+                            )
                         }
                 } catch (e: Exception) {
                     emit(TourCreationPartialState.Error("Failed to update tour: ${e.message}"))
@@ -305,6 +333,10 @@ class TourCreationViewModel @Inject constructor(
                     validationError = null
                 )
             }
+
+            is TourCreationPartialState.UserLocationRetrieved -> {
+                previousState.copy(userLocation = partialState.location)
+            }
         }
     }
 
@@ -368,7 +400,8 @@ data class TourCreationUiState(
     val recurrenceRule: String? = null,
     val isPublishing: Boolean = false,
     val isEditing: Boolean = false,
-    val validationError: String? = null
+    val validationError: String? = null,
+    val userLocation: Location? = null,
 )
 
 sealed interface TourCreationPartialState {
@@ -409,6 +442,8 @@ sealed interface TourCreationPartialState {
     ) : TourCreationPartialState
 
     data class TourUpdated(val tourId: String) : TourCreationPartialState
+
+    data class UserLocationRetrieved(val location: Location) : TourCreationPartialState
 }
 
 sealed interface TourCreationIntent {

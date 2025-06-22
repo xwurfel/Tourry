@@ -88,15 +88,13 @@ fun TourryNavHost(
             route = tourDetailRouteWithArgs,
             arguments = listOf(navArgument("tourId") { type = NavType.StringType })
         ) { backStackEntry ->
-            val tourId = backStackEntry.arguments?.getString("tourId") ?: ""
             TourDetailRoute(
-                tourId = tourId,
                 onNavigateBack = {
                     navController.popBackStack()
                 },
                 onNavigateToLiveTour = {
+                    val tourId = backStackEntry.arguments?.getString("tourId") ?: ""
                     navController.navigate(TourryNavigation.createLiveTourRoute(tourId)) {
-                        // Clear the tour detail from backstack since we're starting the live tour
                         popUpTo(tourDetailRouteWithArgs) { inclusive = true }
                     }
                 },
@@ -107,7 +105,6 @@ fun TourryNavHost(
             )
         }
 
-        // Tour Creation/Editing
         composable(
             route = tourCreationRouteWithArgs,
             arguments = listOf(
@@ -117,10 +114,8 @@ fun TourryNavHost(
                     defaultValue = null
                 }
             )
-        ) { backStackEntry ->
-            val editingTourId = backStackEntry.arguments?.getString("tourId")
+        ) { _ ->
             TourCreationRoute(
-                editingTourId = editingTourId,
                 onNavigateBack = {
                     navController.popBackStack()
                 },
@@ -135,7 +130,6 @@ fun TourryNavHost(
         // Simple tour creation without arguments
         composable(tourCreationRoute) {
             TourCreationRoute(
-                editingTourId = null,
                 onNavigateBack = {
                     navController.popBackStack()
                 },
@@ -153,11 +147,10 @@ fun TourryNavHost(
             route = liveTourRouteWithArgs,
             arguments = listOf(navArgument("tourId") { type = NavType.StringType })
         ) { backStackEntry ->
-            val tourId = backStackEntry.arguments?.getString("tourId") ?: ""
             LiveTourRoute(
-                tourId = tourId,
                 onTourCompleted = {
-                    // Navigate to summary and clear live tour from backstack
+                    val tourId = backStackEntry.arguments?.getString("tourId") ?: ""
+
                     navController.navigate(TourryNavigation.createTourSummaryRoute(tourId)) {
                         popUpTo(liveTourRouteWithArgs) { inclusive = true }
                     }
@@ -172,10 +165,8 @@ fun TourryNavHost(
         composable(
             route = tourSummaryRouteWithArgs,
             arguments = listOf(navArgument("tourId") { type = NavType.StringType })
-        ) { backStackEntry ->
-            val tourId = backStackEntry.arguments?.getString("tourId") ?: ""
+        ) { _ ->
             TourSummaryRoute(
-                tourId = tourId,
                 onNavigateHome = {
                     // Navigate to explore and clear everything above it from backstack
                     navController.navigate(exploreRoute) {

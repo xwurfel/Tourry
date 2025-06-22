@@ -1,10 +1,13 @@
 package com.xwurfel.tourry.ui.tour.detail
 
+import android.content.Context
+import android.location.Location
 import androidx.lifecycle.SavedStateHandle
 import com.xwurfel.tourry.core.domain.util.onFailure
 import com.xwurfel.tourry.core.domain.util.onSuccess
 import com.xwurfel.tourry.core.ui.MviViewModel
 import com.xwurfel.tourry.feature.analytics.TourAnalytics
+import com.xwurfel.tourry.feature.location.LocationManager
 import com.xwurfel.tourry.feature.profile.domain.usecase.GetCurrentUserIdUseCase
 import com.xwurfel.tourry.feature.tours.domain.model.TourDetail
 import com.xwurfel.tourry.feature.tours.domain.usecase.GetTourByIdUseCase
@@ -12,6 +15,7 @@ import com.xwurfel.tourry.feature.tours.domain.usecase.JoinTourUseCase
 import com.xwurfel.tourry.feature.tours.domain.usecase.ObserveUserParticipationsUseCase
 import com.xwurfel.tourry.ui.tour.detail.mapper.TourDetailMapper.toTourDetail
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flow
@@ -26,6 +30,8 @@ class TourDetailViewModel @Inject constructor(
     private val observeUserParticipationsUseCase: ObserveUserParticipationsUseCase,
     private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
     private val tourAnalytics: TourAnalytics,
+    @ApplicationContext private val context: Context,
+    locationManager: LocationManager,
 ) : MviViewModel<TourDetailUiState, TourDetailPartialState, TourDetailEvent, TourDetailIntent>(
     initialState = TourDetailUiState()
 ) {
@@ -40,7 +46,11 @@ class TourDetailViewModel @Inject constructor(
 
         observeContinuousChanges(
             loadTourDetail(),
-            observeJoinedStatus()
+            observeJoinedStatus(),
+            flow {
+                locationManager.getLastKnownLocation()
+                    ?.let { emit(TourDetailPartialState.UserLocationRetrieved(it)) }
+            }
         )
     }
 
@@ -74,7 +84,15 @@ class TourDetailViewModel @Inject constructor(
                         }
                     }
                     .onFailure { error ->
-                        emit(TourDetailPartialState.Error("Failed to join tour: ${error.msg}"))
+                        emit(
+                            TourDetailPartialState.Error(
+                                "Failed to join tour: ${
+                                    error.msg.asString(
+                                        context.resources
+                                    )
+                                }"
+                            )
+                        )
                     }
             }
 
@@ -109,7 +127,15 @@ class TourDetailViewModel @Inject constructor(
                         emit(TourDetailPartialState.TourLoaded(tour.toTourDetail(isJoined = isJoined)))
                     }
                     .onFailure { error ->
-                        emit(TourDetailPartialState.Error("Failed to refresh tour: ${error.msg}"))
+                        emit(
+                            TourDetailPartialState.Error(
+                                "Failed to refresh tour: ${
+                                    error.msg.asString(
+                                        context.resources
+                                    )
+                                }"
+                            )
+                        )
                     }
             }
         }
@@ -155,6 +181,10 @@ class TourDetailViewModel @Inject constructor(
                 isJoining = false,
                 error = partialState.message
             )
+
+            is TourDetailPartialState.UserLocationRetrieved -> previousState.copy(
+                userLocation = partialState.location
+            )
         }
     }
 
@@ -167,7 +197,15 @@ class TourDetailViewModel @Inject constructor(
                 emit(TourDetailPartialState.TourLoaded(tour.toTourDetail(isJoined = isJoined)))
             }
             .onFailure { error ->
-                emit(TourDetailPartialState.Error("Failed to load tour: ${error.msg}"))
+                emit(
+                    TourDetailPartialState.Error(
+                        "Failed to load tour: ${
+                            error.msg.asString(
+                                context.resources
+                            )
+                        }"
+                    )
+                )
             }
     }
 
@@ -199,28 +237,30 @@ data class TourDetailUiState(
     val tour: TourDetail? = null,
     val isLoading: Boolean = false,
     val isJoining: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
+    val userLocation: Location? = null
 )
 
 sealed interface TourDetailPartialState {
-    object Loading : TourDetailPartialState
+    data object Loading : TourDetailPartialState
     data class TourLoaded(val tour: TourDetail) : TourDetailPartialState
-    object JoiningTour : TourDetailPartialState
-    object TourJoined : TourDetailPartialState
+    data object JoiningTour : TourDetailPartialState
+    data object TourJoined : TourDetailPartialState
     data class JoinedStatusUpdated(val isJoined: Boolean) : TourDetailPartialState
-    object TourShared : TourDetailPartialState
+    data object TourShared : TourDetailPartialState
     data class Error(val message: String) : TourDetailPartialState
+    data class UserLocationRetrieved(val location: Location) : TourDetailPartialState
 }
 
 sealed interface TourDetailIntent {
-    object JoinTour : TourDetailIntent
-    object StartTour : TourDetailIntent
-    object RefreshTour : TourDetailIntent
-    object ShareTour : TourDetailIntent
+    data object JoinTour : TourDetailIntent
+    data object StartTour : TourDetailIntent
+    data object RefreshTour : TourDetailIntent
+    data object ShareTour : TourDetailIntent
 }
 
 sealed interface TourDetailEvent {
-    object NavigateToLiveTour : TourDetailEvent
-    object NavigateToBooking : TourDetailEvent
+    data object NavigateToLiveTour : TourDetailEvent
+    data object NavigateToBooking : TourDetailEvent
 }
 

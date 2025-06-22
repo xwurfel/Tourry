@@ -1,10 +1,12 @@
 package com.xwurfel.tourry.feature.mock
 
+import android.content.Context
 import com.xwurfel.tourry.core.domain.util.onFailure
 import com.xwurfel.tourry.core.domain.util.onSuccess
 import com.xwurfel.tourry.feature.tours.domain.model.CreateTourRequest
 import com.xwurfel.tourry.feature.tours.domain.model.CreateTourStop
 import com.xwurfel.tourry.feature.tours.domain.repository.TourRepository
+import dagger.hilt.android.qualifiers.ApplicationContext
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -16,7 +18,8 @@ import javax.inject.Singleton
 @Singleton
 class MigrationHelper @Inject constructor(
     private val mockDataManager: MockDataManager,
-    private val tourRepository: TourRepository
+    private val tourRepository: TourRepository,
+    @ApplicationContext private val context: Context,
 ) {
 
     /**
@@ -65,7 +68,13 @@ class MigrationHelper @Inject constructor(
                             successCount++
                         }
                         .onFailure { error ->
-                            Timber.e("Failed to migrate tour: ${tourDetail.title} - ${error.msg}")
+                            Timber.e(
+                                "Failed to migrate tour: ${tourDetail.title} - ${
+                                    error.msg.asString(
+                                        context.resources
+                                    )
+                                }"
+                            )
                             errorCount++
                         }
                 } else {
@@ -131,7 +140,15 @@ class MigrationHelper @Inject constructor(
                 Timber.d(report)
                 Result.success(report)
             }.onFailure { error ->
-                Result.failure<String>(Exception("Failed to verify migration: ${error.msg}"))
+                Result.failure<String>(
+                    Exception(
+                        "Failed to verify migration: ${
+                            error.msg.asString(
+                                context.resources
+                            )
+                        }"
+                    )
+                )
             }
 
         } catch (e: Exception) {

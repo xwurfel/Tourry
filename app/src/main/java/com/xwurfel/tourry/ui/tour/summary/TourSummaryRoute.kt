@@ -56,7 +56,6 @@ import com.xwurfel.tourry.feature.tours.domain.model.TourStats
 
 @Composable
 fun TourSummaryRoute(
-    tourId: String,
     onNavigateHome: () -> Unit,
     viewModel: TourSummaryViewModel = hiltViewModel()
 ) {

@@ -1,5 +1,6 @@
 package com.xwurfel.tourry.ui.tour.live
 
+import android.content.Context
 import androidx.lifecycle.SavedStateHandle
 import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.SphericalUtil
@@ -21,6 +22,7 @@ import com.xwurfel.tourry.feature.tours.domain.usecase.GetLiveTourUseCase
 import com.xwurfel.tourry.feature.tours.domain.usecase.RecordStopVisitUseCase
 import com.xwurfel.tourry.feature.tours.domain.usecase.StartTourSessionUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
@@ -40,6 +42,7 @@ class LiveTourViewModel @Inject constructor(
     private val startTourSessionUseCase: StartTourSessionUseCase,
     private val recordStopVisitUseCase: RecordStopVisitUseCase,
     private val completeTourSessionUseCase: CompleteTourSessionUseCase,
+    @ApplicationContext private val context: Context,
 ) : MviViewModel<LiveTourUiState, LiveTourPartialState, LiveTourEvent, LiveTourIntent>(
     initialState = LiveTourUiState()
 ) {
@@ -74,7 +77,15 @@ class LiveTourViewModel @Inject constructor(
                         currentSessionId = sessionId
                         tourStartTime = System.currentTimeMillis()
                     }.onFailure { error ->
-                        emit(LiveTourPartialState.Error("Failed to start tour session: ${error.msg}"))
+                        emit(
+                            LiveTourPartialState.Error(
+                                "Failed to start tour session: ${
+                                    error.msg.asString(
+                                        context.resources
+                                    )
+                                }"
+                            )
+                        )
                         return@flow
                     }
 
@@ -275,7 +286,13 @@ class LiveTourViewModel @Inject constructor(
             currentSessionId?.let { sessionId ->
                 completeTourSessionUseCase(sessionId, completionPercentage, totalDuration)
                     .onFailure { error ->
-                        Timber.e("Failed to complete tour session: ${error.msg}")
+                        Timber.e(
+                            "Failed to complete tour session: ${
+                                error.msg.asString(
+                                    context.resources
+                                )
+                            }"
+                        )
                     }
             }
 
@@ -306,7 +323,13 @@ class LiveTourViewModel @Inject constructor(
                         timestamp = System.currentTimeMillis(),
                         userLocation = Pair(location.latitude, location.longitude)
                     ).onFailure { error ->
-                        Timber.e("Failed to record stop visit: ${error.msg}")
+                        Timber.e(
+                            "Failed to record stop visit: ${
+                                error.msg.asString(
+                                    context.resources
+                                )
+                            }"
+                        )
                     }
                 }
             }
@@ -416,7 +439,15 @@ class LiveTourViewModel @Inject constructor(
                     ))
             }
             .onFailure { error ->
-                emit(LiveTourPartialState.Error("Failed to load tour: ${error.msg}"))
+                emit(
+                    LiveTourPartialState.Error(
+                        "Failed to load tour: ${
+                            error.msg.asString(
+                                context.resources
+                            )
+                        }"
+                    )
+                )
             }
     }
 

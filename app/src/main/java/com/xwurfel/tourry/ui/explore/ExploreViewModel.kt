@@ -1,9 +1,12 @@
 package com.xwurfel.tourry.ui.explore
 
+import android.content.Context
+import android.location.Location
 import com.xwurfel.tourry.core.domain.util.onFailure
 import com.xwurfel.tourry.core.domain.util.onSuccess
 import com.xwurfel.tourry.core.ui.MviViewModel
 import com.xwurfel.tourry.feature.analytics.TourAnalytics
+import com.xwurfel.tourry.feature.location.LocationManager
 import com.xwurfel.tourry.feature.profile.domain.usecase.GetCurrentUserIdUseCase
 import com.xwurfel.tourry.feature.tours.domain.model.ExploreFilters
 import com.xwurfel.tourry.feature.tours.domain.model.TourPreview
@@ -13,6 +16,7 @@ import com.xwurfel.tourry.feature.tours.domain.usecase.ObserveUserParticipations
 import com.xwurfel.tourry.feature.tours.domain.usecase.SearchToursUseCase
 import com.xwurfel.tourry.ui.explore.mapper.TourPreviewMapper.toTourPreviews
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.filterNotNull
@@ -27,7 +31,9 @@ class ExploreViewModel @Inject constructor(
     private val joinTourUseCase: JoinTourUseCase,
     private val observeUserParticipationsUseCase: ObserveUserParticipationsUseCase,
     private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
-    private val tourAnalytics: TourAnalytics
+    private val tourAnalytics: TourAnalytics,
+    @ApplicationContext private val context: Context,
+    locationManager: LocationManager,
 ) : MviViewModel<ExploreUiState, ExplorePartialState, ExploreEvent, ExploreIntent>(
     initialState = ExploreUiState()
 ) {
@@ -35,7 +41,12 @@ class ExploreViewModel @Inject constructor(
     init {
         observeContinuousChanges(
             loadTours(),
-            observeJoinedTours()
+            observeJoinedTours(),
+            flow {
+                val location =
+                    locationManager.getLastKnownLocation()
+                location?.let { emit(ExplorePartialState.UserLocationRetrieved(it)) }
+            }
         )
     }
 
@@ -103,6 +114,10 @@ class ExploreViewModel @Inject constructor(
                 isLoading = false,
                 error = partialState.message
             )
+
+            is ExplorePartialState.UserLocationRetrieved -> previousState.copy(
+                userLocation = partialState.location
+            )
         }
     }
 
@@ -118,7 +133,15 @@ class ExploreViewModel @Inject constructor(
                 tourAnalytics.trackSearch(query = query, resultsCount = tourPreviews.size)
                 emit(ExplorePartialState.ToursFiltered(tourPreviews))
             }.onFailure { error ->
-                emit(ExplorePartialState.Error("Search failed: ${error.msg}"))
+                emit(
+                    ExplorePartialState.Error(
+                        "Search failed: ${
+                            error.msg.asString(
+                                context.resources
+                            )
+                        }"
+                    )
+                )
             }
         } else {
             emit(ExplorePartialState.ToursFiltered(uiStateSnapshot.value.allTours))
@@ -137,7 +160,15 @@ class ExploreViewModel @Inject constructor(
                 emit(ExplorePartialState.TourJoined(tourId))
             }
             .onFailure { error ->
-                emit(ExplorePartialState.Error("Failed to join tour: ${error.msg}"))
+                emit(
+                    ExplorePartialState.Error(
+                        "Failed to join tour: ${
+                            error.msg.asString(
+                                context.resources
+                            )
+                        }"
+                    )
+                )
             }
     }
 
@@ -190,7 +221,15 @@ class ExploreViewModel @Inject constructor(
 
             emit(ExplorePartialState.ToursFiltered(filteredTours))
         }.onFailure { error ->
-            emit(ExplorePartialState.Error("Filtering failed: ${error.msg}"))
+            emit(
+                ExplorePartialState.Error(
+                    "Filtering failed: ${
+                        error.msg.asString(
+                            context.resources
+                        )
+                    }"
+                )
+            )
         }
     }
 
@@ -224,7 +263,8 @@ data class ExploreUiState(
     val isLoading: Boolean = false,
     val isMapMode: Boolean = false,
     val joinedTourIds: Set<String> = emptySet(),
-    val error: String? = null
+    val error: String? = null,
+    val userLocation: Location? = null,
 )
 
 sealed interface ExplorePartialState {
@@ -238,6 +278,7 @@ sealed interface ExplorePartialState {
     data class TourJoined(val tourId: String) : ExplorePartialState
     data class JoinedToursUpdated(val joinedTourIds: Set<String>) : ExplorePartialState
     data class Error(val message: String) : ExplorePartialState
+    data class UserLocationRetrieved(val location: Location) : ExplorePartialState
 }
 
 sealed interface ExploreIntent {
