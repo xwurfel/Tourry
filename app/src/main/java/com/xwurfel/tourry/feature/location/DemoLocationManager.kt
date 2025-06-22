@@ -38,11 +38,12 @@ class DemoLocationManager @Inject constructor(
     private var currentStopIndex = 0
     private var isSimulationActive = false
 
-    // Demo configuration
-    private val movementSpeed = 5.0 // meters per second (walking speed)
+    // Updated demo configuration for better UX
+    private val movementSpeed = 6.0 // meters per second (brisk walk for demo)
     private val updateInterval = 1000L // milliseconds between location updates
-    private val stopDwellTime = 8000L // time to spend at each stop in milliseconds
-    private val startingOffset = 100.0 // meters away from first stop to start simulation
+    private val stopDwellTime = 8000L // time to spend at each stop (8 seconds total - allows 5s for content + 3s buffer)
+    private val startingOffset = 60.0 // meters away from first stop to start simulation
+    private val approachDistance = 10.0 // distance to stop before reaching exact coordinates
 
     suspend fun startLocationUpdates(
         tourId: String? = null,
@@ -158,7 +159,7 @@ class DemoLocationManager @Inject constructor(
             )
 
             emitLocation(startingLocation.first, startingLocation.second)
-            delay(2000) // Initial delay
+            delay(1500) // Initial delay
 
             // Move through each tour stop
             for (stopIndex in tourStops.indices) {
@@ -167,20 +168,76 @@ class DemoLocationManager @Inject constructor(
                 val targetStop = tourStops[stopIndex]
                 currentStopIndex = stopIndex
 
-                // Move to the stop
-                moveToLocation(targetStop.latitude, targetStop.longitude)
+                Timber.d("🎯 Demo: Moving to stop ${stopIndex + 1}: ${targetStop.name}")
 
-                // Dwell at the stop
+                // Move close to the stop (but not exactly to center for more realistic geofence entry)
+                val approachLocation = calculateOffsetLocation(
+                    targetStop.latitude,
+                    targetStop.longitude,
+                    approachDistance,
+                    (stopIndex * 45.0) % 360.0 // Different approach angle for each stop
+                )
+
+                Timber.d("🎯 Demo: Approaching stop ${stopIndex + 1}: ${targetStop.name} at ${approachLocation.first.format(6)}, ${approachLocation.second.format(6)}")
+                moveToLocation(approachLocation.first, approachLocation.second)
+
+                // Dwell at the stop (content should show for about 5 seconds during this time)
                 if (isSimulationActive) {
-                    Timber.d("🎯 Demo: Arrived at stop ${stopIndex + 1}: ${targetStop.name}")
-                    delay(stopDwellTime)
+                    Timber.d("📍 Demo: Arrived at stop ${stopIndex + 1}: ${targetStop.name}")
+                    Timber.d("📍 Demo: Will dwell for ${stopDwellTime / 1000} seconds")
+
+                    // Emit a few location updates while at the stop to maintain geofence
+                    val dwellUpdates = (stopDwellTime / updateInterval).toInt()
+                    repeat(dwellUpdates) { updateIndex ->
+                        if (!isSimulationActive) return@repeat
+
+                        // Add slight variations in location while dwelling (stay within geofence)
+                        val variation = (updateIndex % 4 - 2) * 2.0 // +/- 4 meters variation
+                        val variedLocation = calculateOffsetLocation(
+                            approachLocation.first,
+                            approachLocation.second,
+                            variation,
+                            (updateIndex * 90.0) % 360.0
+                        )
+
+                        emitLocation(variedLocation.first, variedLocation.second)
+
+                        // Log progress
+                        if (updateIndex % 3 == 0) {
+                            Timber.d("⏰ Demo: Dwelling at ${targetStop.name} - ${updateIndex + 1}/${dwellUpdates} updates")
+                        }
+
+                        delay(updateInterval)
+                    }
+                }
+
+                // Brief movement away from stop to trigger geofence exit
+                if (isSimulationActive && stopIndex < tourStops.size - 1) {
+                    val exitLocation = calculateOffsetLocation(
+                        targetStop.latitude,
+                        targetStop.longitude,
+                        35.0, // Move just outside geofence radius
+                        ((stopIndex + 1) * 60.0) % 360.0
+                    )
+
+                    // Quick movement to trigger exit
+                    for (i in 1..3) {
+                        if (!isSimulationActive) break
+                        val progress = i / 3.0
+                        val intermediateLat = approachLocation.first + (exitLocation.first - approachLocation.first) * progress
+                        val intermediateLon = approachLocation.second + (exitLocation.second - approachLocation.second) * progress
+                        emitLocation(intermediateLat, intermediateLon)
+                        delay(updateInterval / 2)
+                    }
+
+                    delay(500) // Brief pause between stops
                 }
             }
 
             // Simulation complete
             if (isSimulationActive) {
-                Timber.d("🏁 Demo: Tour simulation completed!")
-                delay(3000) // Final delay before stopping
+                Timber.d("🏁 Demo: Tour simulation completed! All stops visited.")
+                delay(2000) // Final delay
             }
         }
     }
@@ -221,19 +278,19 @@ class DemoLocationManager @Inject constructor(
         val location = createLocationForCoordinates(latitude, longitude)
         _locationUpdates.emit(location)
 
-        Timber.v("📍 Demo: Location update - ${latitude.format(6)}, ${longitude.format(6)}")
+        Timber.d("📍 Demo: Location update - ${latitude.format(6)}, ${longitude.format(6)}")
     }
 
     private fun createLocationForCoordinates(latitude: Double, longitude: Double): Location {
         return Location("demo").apply {
             this.latitude = latitude
             this.longitude = longitude
-            this.accuracy = 10f // 10 meter accuracy
+            this.accuracy = 8f // Good GPS accuracy for demo
             this.time = System.currentTimeMillis()
             this.elapsedRealtimeNanos = SystemClock.elapsedRealtimeNanos()
 
             // Add some realistic movement data
-            this.speed = movementSpeed.toFloat()
+            this.speed = if (isSimulationActive) movementSpeed.toFloat() else 0f
             this.bearing = 0f // Could be calculated based on movement direction
         }
     }

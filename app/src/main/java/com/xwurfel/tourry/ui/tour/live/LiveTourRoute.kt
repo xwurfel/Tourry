@@ -1,9 +1,17 @@
 package com.xwurfel.tourry.ui.tour.live
 
+import android.location.Location
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -18,6 +26,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOff
 import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.Pause
@@ -57,11 +66,15 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.google.android.gms.maps.CameraUpdateFactory
+import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import com.google.android.gms.maps.model.CameraPosition
+import com.google.android.gms.maps.model.Dash
+import com.google.android.gms.maps.model.Gap
 import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.compose.Circle
 import com.google.maps.android.compose.GoogleMap
@@ -80,6 +93,8 @@ import com.xwurfel.tourry.feature.tours.domain.model.StopContent
 import com.xwurfel.tourry.feature.tours.domain.model.TourStatus
 import com.xwurfel.tourry.ui.theme.TourryTheme
 import com.xwurfel.tourry.util.permissions.LocationPermissionsHandler
+import kotlinx.coroutines.delay
+import timber.log.Timber
 
 @Composable
 fun LiveTourRoute(
@@ -121,6 +136,7 @@ fun LiveTourRoute(
 fun LiveTourScreen(
     uiState: LiveTourUiState,
     onIntent: (LiveTourIntent) -> Unit,
+    showDebugInfo: Boolean = true
 ) {
     var showExitDialog by remember { mutableStateOf(false) }
 
@@ -172,10 +188,18 @@ fun LiveTourScreen(
                 }
             }
 
+            // Debug overlay (only in debug builds)
+            if (showDebugInfo) {
+                DebugInfoOverlay(
+                    uiState = uiState,
+                    modifier = Modifier.align(Alignment.TopCenter)
+                )
+            }
+
             // Overlays
             TourProgressOverlay(
                 progress = uiState.progress,
-                currentStop = uiState.currentStopIndex + 1,
+                currentStop = uiState.visitedStopsCount,
                 totalStops = uiState.tourStops.size,
                 modifier = Modifier.align(Alignment.TopStart)
             )
@@ -185,9 +209,76 @@ fun LiveTourScreen(
                 modifier = Modifier.align(Alignment.TopEnd)
             )
 
-            // Current stop content card
+            // Debug: Show a test content card to verify rendering works
+            if (showDebugInfo && uiState.tourStops.isNotEmpty()) {
+                val testStop = uiState.tourStops.first()
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .padding(16.dp)
+                ) {
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = Color.Red.copy(alpha = 0.8f),
+                            contentColor = Color.White
+                        )
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text(
+                                "DEBUG TEST CARD",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                "If you see this, UI rendering works",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                            Text(
+                                "First stop: ${testStop.name}",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                            Text(
+                                "Has content: ${testStop.content != null}",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Debug: Manual geofence trigger for testing
+            if (showDebugInfo && uiState.tourStops.isNotEmpty() && uiState.tourStatus == TourStatus.ACTIVE) {
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    uiState.tourStops.take(2).forEach { stop ->
+                        Button(
+                            onClick = {
+                                Timber.d("🔧 DEBUG: Manually triggering geofence entry for ${stop.name}")
+                                onIntent(LiveTourIntent.OnGeofenceEntered(stop.id))
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (stop.isVisited) Color.Green else Color.Blue
+                            ),
+                            modifier = Modifier.size(width = 120.dp, height = 32.dp),
+                            contentPadding = PaddingValues(4.dp)
+                        ) {
+                            Text(
+                                "Enter ${stop.name.take(8)}",
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                        }
+                    }
+                }
+            }
             uiState.currentStop?.let { stop ->
+                Timber.d("🎯 UI: Current stop check - name: ${stop.name}, isActive: ${stop.isActive}, hasContent: ${stop.content != null}")
                 if (stop.isActive && stop.content != null) {
+                    Timber.d("🎯 UI: SHOWING content card for stop: ${stop.name}")
+                    Timber.d("🎯 UI: Content text: ${stop.content.text.take(100)}...")
                     StopContentCard(
                         content = stop.content,
                         stopName = stop.name,
@@ -197,13 +288,29 @@ fun LiveTourScreen(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
                             .padding(16.dp),
-                        onDismiss = { onIntent(LiveTourIntent.DismissContent) },
+                        onDismiss = {
+                            Timber.d("🎯 UI: Content dismissed by user")
+                            onIntent(LiveTourIntent.DismissContent)
+                        },
                         onPlayAudio = { audioUrl -> onIntent(LiveTourIntent.PlayAudio(audioUrl)) },
                         onPauseAudio = { onIntent(LiveTourIntent.PauseAudio) },
                         onResumeAudio = { onIntent(LiveTourIntent.ResumeAudio) },
                         onSeekAudio = { position -> onIntent(LiveTourIntent.SeekAudio(position)) }
                     )
+                } else {
+                    Timber.d("🎯 UI: Content card NOT shown - isActive: ${stop.isActive}, hasContent: ${stop.content != null}")
+                    if (stop.content != null) {
+                        Timber.d(
+                            "🎯 UI: Content exists but stop not active: ${
+                                stop.content.text.take(
+                                    50
+                                )
+                            }..."
+                        )
+                    }
                 }
+            } ?: run {
+                Timber.d("🎯 UI: No current stop set")
             }
         }
     }
@@ -310,7 +417,7 @@ private fun LiveTourMapView(uiState: LiveTourUiState) {
         val cameraPositionState = rememberCameraPositionState {
             position = CameraPosition.fromLatLngZoom(
                 LatLng(uiState.userLocation.latitude, uiState.userLocation.longitude),
-                17f
+                16f
             )
         }
 
@@ -318,7 +425,7 @@ private fun LiveTourMapView(uiState: LiveTourUiState) {
             cameraPositionState.animate(
                 CameraUpdateFactory.newLatLngZoom(
                     LatLng(uiState.userLocation.latitude, uiState.userLocation.longitude),
-                    17f
+                    16f
                 )
             )
         }
@@ -333,33 +440,47 @@ private fun LiveTourMapView(uiState: LiveTourUiState) {
                 compassEnabled = true
             )
         ) {
-            // User location marker
+            // User location marker - PROMINENT and VISIBLE
             Marker(
                 state = rememberMarkerState(
-                    key = uiState.userLocation.toString(),
+                    key = "user_location_${uiState.userLocation.timestamp}",
                     position = LatLng(
                         uiState.userLocation.latitude,
                         uiState.userLocation.longitude
                     )
                 ),
-                title = "You are here"
+                title = "Your Location",
+                snippet = "Accuracy: ${uiState.userLocation.accuracy.toInt()}m",
+                icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_BLUE),
+                zIndex = 1000f // Ensure it's on top
+            )
+
+            // User location accuracy circle
+            Circle(
+                center = LatLng(uiState.userLocation.latitude, uiState.userLocation.longitude),
+                radius = uiState.userLocation.accuracy.toDouble(),
+                fillColor = Color.Blue.copy(alpha = 0.1f),
+                strokeColor = Color.Blue.copy(alpha = 0.3f),
+                strokeWidth = 2f,
+                zIndex = 100f
             )
 
             // Tour stops and geofences
             uiState.tourStops.forEach { stop ->
                 val stopColor = when {
-                    stop.isActive -> MaterialTheme.colorScheme.primary
-                    stop.isVisited -> MaterialTheme.colorScheme.tertiary
-                    else -> MaterialTheme.colorScheme.outline
+                    stop.isActive -> Color(0xFF4CAF50) // Green for active
+                    stop.isVisited -> Color(0xFF2196F3) // Blue for visited
+                    else -> Color(0xFF9E9E9E) // Gray for unvisited
                 }
 
                 // Geofence circle
                 Circle(
                     center = LatLng(stop.latitude, stop.longitude),
                     radius = stop.geofenceRadius.toDouble(),
-                    fillColor = stopColor.copy(alpha = 0.2f),
-                    strokeColor = stopColor,
-                    strokeWidth = 2f
+                    fillColor = stopColor.copy(alpha = 0.15f),
+                    strokeColor = stopColor.copy(alpha = 0.6f),
+                    strokeWidth = 3f,
+                    zIndex = 50f
                 )
 
                 // Stop marker
@@ -367,23 +488,54 @@ private fun LiveTourMapView(uiState: LiveTourUiState) {
                     state = MarkerState(
                         position = LatLng(stop.latitude, stop.longitude)
                     ),
-                    title = "${stop.order}. ${stop.name}"
+                    title = "${stop.order}. ${stop.name}",
+                    snippet = when {
+                        stop.isActive -> "Currently visiting"
+                        stop.isVisited -> "Completed"
+                        else -> "Upcoming stop"
+                    },
+                    icon = when {
+                        stop.isActive -> BitmapDescriptorFactory.defaultMarker(
+                            BitmapDescriptorFactory.HUE_GREEN
+                        )
+
+                        stop.isVisited -> BitmapDescriptorFactory.defaultMarker(
+                            BitmapDescriptorFactory.HUE_BLUE
+                        )
+
+                        else -> BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ORANGE)
+                    },
+                    zIndex = 200f
                 )
             }
 
             // Route line connecting stops
             if (uiState.tourStops.size > 1) {
                 Polyline(
-                    points = uiState.tourStops.map {
+                    points = uiState.tourStops.sortedBy { it.order }.map {
                         LatLng(it.latitude, it.longitude)
                     },
                     color = MaterialTheme.colorScheme.primary,
-                    width = 5f
+                    width = 4f,
+                    zIndex = 10f
+                )
+            }
+
+            // Line from user to next stop
+            uiState.nextStop?.let { nextStop ->
+                Polyline(
+                    points = listOf(
+                        LatLng(uiState.userLocation.latitude, uiState.userLocation.longitude),
+                        LatLng(nextStop.latitude, nextStop.longitude)
+                    ),
+                    color = Color.Blue.copy(alpha = 0.7f),
+                    width = 3f,
+                    pattern = listOf(Dash(20f), Gap(10f)),
+                    zIndex = 15f
                 )
             }
         }
     } else {
-        // Waiting for location
         Box(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
@@ -392,15 +544,28 @@ private fun LiveTourMapView(uiState: LiveTourUiState) {
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(48.dp),
+                    strokeWidth = 4.dp
+                )
+
                 Icon(
                     Icons.Default.LocationOff,
                     contentDescription = null,
                     modifier = Modifier.size(48.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+
                 Text(
                     "Waiting for location...",
-                    style = MaterialTheme.typography.bodyLarge
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Medium
+                )
+
+                Text(
+                    "Make sure location services are enabled",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
@@ -510,83 +675,196 @@ fun StopContentCard(
     onResumeAudio: () -> Unit,
     onSeekAudio: (Int) -> Unit
 ) {
-    Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .animateContentSize(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+    // Auto-dismiss timer state
+    var remainingTime by remember { mutableStateOf(5) }
+    var isVisible by remember { mutableStateOf(true) }
+
+    // Countdown timer
+    LaunchedEffect(Unit) {
+        while (remainingTime > 0 && isVisible) {
+            delay(1000L)
+            remainingTime--
+        }
+        if (remainingTime <= 0) {
+            onDismiss()
+        }
+    }
+
+    AnimatedVisibility(
+        visible = isVisible,
+        enter = slideInVertically(
+            initialOffsetY = { it },
+            animationSpec = tween(300)
+        ) + fadeIn(animationSpec = tween(300)),
+        exit = slideOutVertically(
+            targetOffsetY = { it },
+            animationSpec = tween(300)
+        ) + fadeOut(animationSpec = tween(300))
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+        Card(
+            modifier = modifier
+                .fillMaxWidth()
+                .animateContentSize(),
+            elevation = CardDefaults.cardElevation(defaultElevation = 12.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface,
+                contentColor = MaterialTheme.colorScheme.onSurface
+            ),
+            shape = RoundedCornerShape(16.dp)
         ) {
-            // Header
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            Column(
+                modifier = Modifier.padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
+                // Header with timer
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Surface(
-                        modifier = Modifier.size(24.dp),
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.primary
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Box(contentAlignment = Alignment.Center) {
+                        // Animated stop number indicator
+                        Surface(
+                            modifier = Modifier.size(36.dp),
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.primary,
+                            shadowElevation = 4.dp
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Text(
+                                    text = stopOrder.toString(),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.onPrimary,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+
+                        Column {
                             Text(
-                                text = stopOrder.toString(),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onPrimary,
-                                fontWeight = FontWeight.Bold
+                                text = stopName,
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "Tour Stop Information",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
+
+                    // Timer indicator
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier.size(32.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(
+                                progress = { (5 - remainingTime) / 5f },
+                                modifier = Modifier.fillMaxSize(),
+                                color = MaterialTheme.colorScheme.primary,
+                                strokeWidth = 3.dp,
+                                trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                            )
+                            Text(
+                                text = remainingTime.toString(),
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+
+                        TextButton(
+                            onClick = {
+                                isVisible = false
+                                onDismiss()
+                            },
+                            modifier = Modifier.padding(0.dp),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Text(
+                                "Close",
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                        }
+                    }
+                }
+
+                // Content section
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    // Image if available
+                    if (content.imageUrls.isNotEmpty()) {
+                        AsyncImage(
+                            model = content.imageUrls.first(),
+                            contentDescription = null,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(160.dp)
+                                .clip(RoundedCornerShape(12.dp)),
+                            contentScale = ContentScale.Crop
+                        )
+                    }
+
+                    // Text content
+                    if (content.text.isNotEmpty()) {
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                            )
+                        ) {
+                            Text(
+                                text = content.text,
+                                style = MaterialTheme.typography.bodyLarge,
+                                modifier = Modifier.padding(16.dp),
+                                lineHeight = 24.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    // Audio Player
+                    if (content.audioUrl != null) {
+                        AudioPlayerCard(
+                            audioUrl = content.audioUrl,
+                            audioPlayerState = audioPlayerState,
+                            isCurrentlyPlaying = currentlyPlayingAudio == content.audioUrl,
+                            onPlayAudio = onPlayAudio,
+                            onPauseAudio = onPauseAudio,
+                            onResumeAudio = onResumeAudio,
+                            onSeekAudio = onSeekAudio
+                        )
+                    }
+                }
+
+                // Action hint
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Default.Info,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = stopName,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
+                        "Content will auto-close in ${remainingTime}s",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary
                     )
                 }
-
-                TextButton(onClick = onDismiss) {
-                    Text("Close")
-                }
-            }
-
-            // Content
-            if (content.imageUrls.isNotEmpty()) {
-                AsyncImage(
-                    model = content.imageUrls.first(),
-                    contentDescription = null,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(150.dp)
-                        .clip(RoundedCornerShape(8.dp)),
-                    contentScale = ContentScale.Crop
-                )
-            }
-
-            if (content.text.isNotEmpty()) {
-                Text(
-                    text = content.text,
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            }
-
-            // Audio Player
-            if (content.audioUrl != null) {
-                AudioPlayerCard(
-                    audioUrl = content.audioUrl,
-                    audioPlayerState = audioPlayerState,
-                    isCurrentlyPlaying = currentlyPlayingAudio == content.audioUrl,
-                    onPlayAudio = onPlayAudio,
-                    onPauseAudio = onPauseAudio,
-                    onResumeAudio = onResumeAudio,
-                    onSeekAudio = onSeekAudio
-                )
             }
         }
     }
@@ -861,3 +1139,109 @@ private fun LiveTourPreview() {
         )
     }
 }
+
+@Composable
+fun DebugInfoOverlay(
+    uiState: LiveTourUiState,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(8.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = Color.Black.copy(alpha = 0.8f),
+            contentColor = Color.White
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(
+                "DEBUG INFO",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = Color.Yellow
+            )
+
+            Text("Tour ID: ${uiState.tourTitle}", style = MaterialTheme.typography.bodySmall)
+            Text("Tour Status: ${uiState.tourStatus}", style = MaterialTheme.typography.bodySmall)
+            Text(
+                "Location Enabled: ${uiState.isLocationEnabled}",
+                style = MaterialTheme.typography.bodySmall
+            )
+            Text(
+                "Stops Count: ${uiState.tourStops.size}",
+                style = MaterialTheme.typography.bodySmall
+            )
+            Text(
+                "Visited Count: ${uiState.visitedStopsCount}",
+                style = MaterialTheme.typography.bodySmall
+            )
+            Text(
+                "Current Stop: ${uiState.currentStop?.name ?: "None"}",
+                style = MaterialTheme.typography.bodySmall
+            )
+            Text(
+                "Is Active: ${uiState.currentStop?.isActive ?: false}",
+                style = MaterialTheme.typography.bodySmall
+            )
+            Text(
+                "Has Content: ${uiState.currentStop?.content != null}",
+                style = MaterialTheme.typography.bodySmall
+            )
+            Text(
+                "Content Text: ${uiState.currentStop?.content?.text?.take(50) ?: "None"}...",
+                style = MaterialTheme.typography.bodySmall
+            )
+            Text(
+                "Progress: ${(uiState.progress * 100).toInt()}%",
+                style = MaterialTheme.typography.bodySmall
+            )
+            Text("Can Complete: ${uiState.canComplete}", style = MaterialTheme.typography.bodySmall)
+
+            if (uiState.userLocation != null) {
+                Text(
+                    "Location: ${uiState.userLocation.latitude.format(4)}, ${
+                        uiState.userLocation.longitude.format(
+                            4
+                        )
+                    }",
+                    style = MaterialTheme.typography.bodySmall
+                )
+            } else {
+                Text(
+                    "Location: Not available",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.Red
+                )
+            }
+
+            // Show distance to stops
+            if (uiState.userLocation != null && uiState.tourStops.isNotEmpty()) {
+                uiState.tourStops.take(3).forEach { stop ->
+                    val distance = calculateDistance(
+                        uiState.userLocation.latitude, uiState.userLocation.longitude,
+                        stop.latitude, stop.longitude
+                    )
+                    Text(
+                        "Distance to ${stop.name}: ${distance.toInt()}m (radius: ${stop.geofenceRadius}m)",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (distance <= stop.geofenceRadius) Color.Green else Color.White
+                    )
+                }
+            }
+        }
+    }
+}
+
+// Helper function for distance calculation
+private fun calculateDistance(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
+    val results = FloatArray(1)
+    Location.distanceBetween(lat1, lon1, lat2, lon2, results)
+    return results[0].toDouble()
+}
+
+// Extension function for formatting coordinates
+private fun Double.format(digits: Int) = "%.${digits}f".format(this)
