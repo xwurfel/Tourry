@@ -391,9 +391,9 @@ sealed interface TourCreationPartialState {
     ) : TourCreationPartialState
 
     data class StepChanged(val step: Int) : TourCreationPartialState
-    object Publishing : TourCreationPartialState
+    data object Publishing : TourCreationPartialState
     data class Published(val tourId: String) : TourCreationPartialState
-    object DraftSaved : TourCreationPartialState
+    data object DraftSaved : TourCreationPartialState
     data class ValidationError(val message: String) : TourCreationPartialState
     data class Error(val message: String) : TourCreationPartialState
 
@@ -430,11 +430,11 @@ sealed interface TourCreationIntent {
         val recurrenceRule: String?
     ) : TourCreationIntent
 
-    object NextStep : TourCreationIntent
-    object PreviousStep : TourCreationIntent
-    object PublishTour : TourCreationIntent
-    object SaveDraft : TourCreationIntent
-    object UpdateTour : TourCreationIntent
+    data object NextStep : TourCreationIntent
+    data object PreviousStep : TourCreationIntent
+    data object PublishTour : TourCreationIntent
+    data object SaveDraft : TourCreationIntent
+    data object UpdateTour : TourCreationIntent
 
 }
 

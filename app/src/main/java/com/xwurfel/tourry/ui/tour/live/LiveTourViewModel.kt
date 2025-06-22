@@ -422,7 +422,7 @@ class LiveTourViewModel @Inject constructor(
 
     private fun observeLocationUpdates(): Flow<LiveTourPartialState> {
         return locationManager.locationUpdates
-            .map { location ->
+            .map<_, LiveTourPartialState> { location ->
                 Timber.d(
                     "LiveTourViewModel received location update: " +
                             "${location.latitude}, ${location.longitude}"
@@ -434,7 +434,7 @@ class LiveTourViewModel @Inject constructor(
                         accuracy = location.accuracy,
                         timestamp = location.time
                     )
-                ) as LiveTourPartialState
+                )
             }
             .catch { error ->
                 Timber.e(error, "Error in location updates flow")
@@ -578,30 +578,30 @@ data class LiveTourUiState(
 
 // Partial States
 sealed interface LiveTourPartialState {
-    object Loading : LiveTourPartialState
+    data object Loading : LiveTourPartialState
 
     data class TourDataLoaded(
         val title: String,
         val stops: List<LiveTourStop>
     ) : LiveTourPartialState
 
-    object LocationTrackingStarted : LiveTourPartialState
-    object LocationPermissionDenied : LiveTourPartialState
+    data object LocationTrackingStarted : LiveTourPartialState
+    data object LocationPermissionDenied : LiveTourPartialState
     data class LocationServiceError(val message: String) : LiveTourPartialState
 
     data class LocationUpdated(val location: UserLocation) : LiveTourPartialState
 
-    object TourPaused : LiveTourPartialState
-    object TourResumed : LiveTourPartialState
-    object TourCompleted : LiveTourPartialState
+    data object TourPaused : LiveTourPartialState
+    data object TourResumed : LiveTourPartialState
+    data object TourCompleted : LiveTourPartialState
 
     data class GeofenceEntered(val stopId: String) : LiveTourPartialState
     data class GeofenceExited(val stopId: String) : LiveTourPartialState
 
-    object ContentDismissed : LiveTourPartialState
+    data object ContentDismissed : LiveTourPartialState
 
     data class RouteDeviationDetected(val deviation: RouteDeviation) : LiveTourPartialState
-    object RouteDeviationDismissed : LiveTourPartialState
+    data object RouteDeviationDismissed : LiveTourPartialState
 
     data class AudioPlayerStateChanged(val state: AudioPlayerState) : LiveTourPartialState
     data class AudioStarted(val audioUrl: String) : LiveTourPartialState
@@ -611,19 +611,19 @@ sealed interface LiveTourPartialState {
 
 // Intents
 sealed interface LiveTourIntent {
-    object StartLocationTracking : LiveTourIntent
-    object PauseTour : LiveTourIntent
-    object ResumeTour : LiveTourIntent
-    object CompleteTour : LiveTourIntent
-    object ExitTour : LiveTourIntent
+    data object StartLocationTracking : LiveTourIntent
+    data object PauseTour : LiveTourIntent
+    data object ResumeTour : LiveTourIntent
+    data object CompleteTour : LiveTourIntent
+    data object ExitTour : LiveTourIntent
 
-    object DismissContent : LiveTourIntent
-    object DismissRouteDeviation : LiveTourIntent
+    data object DismissContent : LiveTourIntent
+    data object DismissRouteDeviation : LiveTourIntent
 
     data class PlayAudio(val audioUrl: String) : LiveTourIntent
-    object PauseAudio : LiveTourIntent
-    object ResumeAudio : LiveTourIntent
-    object StopAudio : LiveTourIntent
+    data object PauseAudio : LiveTourIntent
+    data object ResumeAudio : LiveTourIntent
+    data object StopAudio : LiveTourIntent
     data class SeekAudio(val position: Int) : LiveTourIntent
 
     data class OnGeofenceEntered(val stopId: String) : LiveTourIntent
@@ -632,8 +632,8 @@ sealed interface LiveTourIntent {
 
 // Events
 sealed interface LiveTourEvent {
-    object TourCompleted : LiveTourEvent
-    object NavigateBack : LiveTourEvent
+    data object TourCompleted : LiveTourEvent
+    data object NavigateBack : LiveTourEvent
 }
 
 

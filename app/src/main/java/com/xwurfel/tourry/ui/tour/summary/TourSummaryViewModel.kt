@@ -213,7 +213,7 @@ data class TourSummaryUiState(
 )
 
 sealed interface TourSummaryPartialState {
-    object Loading : TourSummaryPartialState
+    data object Loading : TourSummaryPartialState
     data class SummaryLoaded(
         val tourTitle: String,
         val coverImageUrl: String?,
@@ -221,11 +221,11 @@ sealed interface TourSummaryPartialState {
     ) : TourSummaryPartialState
 
     data class RatingUpdated(val rating: Int) : TourSummaryPartialState
-    object RatingSubmitted : TourSummaryPartialState
+    data object RatingSubmitted : TourSummaryPartialState
     data class FeedbackUpdated(val feedback: String) : TourSummaryPartialState
-    object SubmittingFeedback : TourSummaryPartialState
-    object FeedbackSubmitted : TourSummaryPartialState
-    object TourShared : TourSummaryPartialState
+    data object SubmittingFeedback : TourSummaryPartialState
+    data object FeedbackSubmitted : TourSummaryPartialState
+    data object TourShared : TourSummaryPartialState
     data class Error(val message: String) : TourSummaryPartialState
 }
 
@@ -233,11 +233,11 @@ sealed interface TourSummaryIntent {
     data class SubmitRating(val rating: Int) : TourSummaryIntent
     data class UpdateFeedback(val feedback: String) : TourSummaryIntent
     data class SubmitFeedback(val feedback: String) : TourSummaryIntent
-    object ShareTour : TourSummaryIntent
-    object NavigateHome : TourSummaryIntent
+    data object NavigateHome : TourSummaryIntent
+    data object ShareTour : TourSummaryIntent
 }
 
 sealed interface TourSummaryEvent {
-    object NavigateHome : TourSummaryEvent
+    data object NavigateHome : TourSummaryEvent
 }
 

@@ -119,8 +119,8 @@ fun TourryNavHost(
             )
         ) { backStackEntry ->
             val editingTourId = backStackEntry.arguments?.getString("tourId")
-            // TODO: add editingTourId
             TourCreationRoute(
+                editingTourId = editingTourId,
                 onNavigateBack = {
                     navController.popBackStack()
                 },
@@ -135,6 +135,7 @@ fun TourryNavHost(
         // Simple tour creation without arguments
         composable(tourCreationRoute) {
             TourCreationRoute(
+                editingTourId = null,
                 onNavigateBack = {
                     navController.popBackStack()
                 },

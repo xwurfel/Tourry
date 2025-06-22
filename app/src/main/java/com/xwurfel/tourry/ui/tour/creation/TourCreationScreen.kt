@@ -45,6 +45,7 @@ import com.xwurfel.tourry.ui.tour.creation.steps.StopsStep
 
 @Composable
 fun TourCreationRoute(
+    editingTourId: String?,
     onNavigateBack: () -> Unit,
     onTourCreated: (String) -> Unit,
     viewModel: TourCreationViewModel = hiltViewModel()

@@ -55,6 +55,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -72,9 +73,12 @@ import com.google.maps.android.compose.rememberCameraPositionState
 import com.google.maps.android.compose.rememberMarkerState
 import com.xwurfel.tourry.core.extension.collectWithLifecycle
 import com.xwurfel.tourry.feature.audio.domain.model.AudioPlayerState
+import com.xwurfel.tourry.feature.location.domain.model.UserLocation
+import com.xwurfel.tourry.feature.tours.domain.model.LiveTourStop
 import com.xwurfel.tourry.feature.tours.domain.model.RouteDeviation
 import com.xwurfel.tourry.feature.tours.domain.model.StopContent
 import com.xwurfel.tourry.feature.tours.domain.model.TourStatus
+import com.xwurfel.tourry.ui.theme.TourryTheme
 import com.xwurfel.tourry.util.permissions.LocationPermissionsHandler
 
 @Composable
@@ -94,7 +98,6 @@ fun LiveTourRoute(
         }
     }
 
-    // Handle location permissions
     if (!hasRequestedPermissions) {
         LocationPermissionsHandler(
             onPermissionsGranted = {
@@ -469,6 +472,7 @@ private fun TourProgressOverlay(
 
             LinearProgressIndicator(
                 progress = { progress },
+                drawStopIndicator = {},
                 modifier = Modifier.width(120.dp),
                 color = MaterialTheme.colorScheme.primary,
                 trackColor = MaterialTheme.colorScheme.surfaceVariant
@@ -837,4 +841,43 @@ private fun formatTime(milliseconds: Int): String {
     val minutes = seconds / 60
     val remainingSeconds = seconds % 60
     return "%d:%02d".format(minutes, remainingSeconds)
+}
+
+@Preview
+@Composable
+private fun LiveTourPreview() {
+    TourryTheme {
+        LiveTourScreen(
+            LiveTourUiState(
+                tourStops = listOf(
+                    LiveTourStop(
+                        id = "1",
+                        name = "Courtney Stein",
+                        description = "sed",
+                        latitude = 6.7,
+                        longitude = 8.9,
+                        order = 4364,
+                        geofenceRadius = 10.11f,
+                        content = null,
+                        isVisited = false,
+                        isActive = false
+                    ),
+                    LiveTourStop(
+                        id = "2",
+                        name = "Courtney Stein 2",
+                        description = "sed",
+                        latitude = 6.75,
+                        longitude = 8.95,
+                        order = 4365,
+                        geofenceRadius = 10.11f,
+                        content = null,
+                        isVisited = false,
+                        isActive = false
+                    )
+                ),
+                userLocation = UserLocation(60.0, 60.0)
+            ),
+            onIntent = {}
+        )
+    }
 }
