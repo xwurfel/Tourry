@@ -11,9 +11,9 @@ import com.xwurfel.tourry.core.ui.MviViewModel
 import com.xwurfel.tourry.feature.analytics.TourAnalytics
 import com.xwurfel.tourry.feature.audio.AudioPlayerManager
 import com.xwurfel.tourry.feature.audio.domain.model.AudioPlayerState
+import com.xwurfel.tourry.feature.geofencing.DemoGeofencingManager
 import com.xwurfel.tourry.feature.geofencing.GeofenceEvent
-import com.xwurfel.tourry.feature.geofencing.GeofencingManager
-import com.xwurfel.tourry.feature.location.LocationManager
+import com.xwurfel.tourry.feature.location.DemoLocationManager
 import com.xwurfel.tourry.feature.location.domain.model.UserLocation
 import com.xwurfel.tourry.feature.tours.domain.model.LiveTourStop
 import com.xwurfel.tourry.feature.tours.domain.model.RouteDeviation
@@ -25,7 +25,9 @@ import com.xwurfel.tourry.feature.tours.domain.usecase.StartTourSessionUseCase
 import com.xwurfel.tourry.feature.tours.domain.usecase.StartTourUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flow
@@ -37,8 +39,9 @@ import javax.inject.Inject
 @HiltViewModel
 class LiveTourViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
-    private val locationManager: LocationManager,
-    private val geofencingManager: GeofencingManager,
+    private val locationManager: DemoLocationManager,
+    private val geofencingManager: DemoGeofencingManager,
+    private val demoTourCoordinator: DemoTourCoordinator,
     private val audioPlayerManager: AudioPlayerManager,
     private val tourAnalytics: TourAnalytics,
     private val getTourByIdUseCase: GetTourByIdUseCase,
@@ -61,12 +64,61 @@ class LiveTourViewModel @Inject constructor(
             observeLocationUpdates(),
             observeGeofenceEvents(),
             observeAudioPlayerState(),
-            observeServiceConnection()
+            observeServiceConnection(),
         )
+    }
+
+    private suspend fun handleDemoStart(): LiveTourPartialState {
+        return try {
+            Timber.d("🎭 Demo: Starting demo tour simulation")
+
+            val tourStops = uiStateSnapshot.value.tourStops
+            if (tourStops.isNotEmpty()) {
+                // Start tour session
+                val sessionResult = startTourSessionUseCase(tourId, getCurrentUserId())
+                sessionResult.onSuccess { sessionId ->
+                    currentSessionId = sessionId
+                    tourStartTime = System.currentTimeMillis()
+                }.onFailure { error ->
+                    return LiveTourPartialState.Error(
+                        "Failed to start tour session: ${error.msg.asString(context.resources)}"
+                    )
+                }
+
+                // Start demo simulation
+                demoTourCoordinator.startTourSimulation(
+                    tourId,
+                    uiStateSnapshot.value.tourTitle,
+                    tourStops
+                ).getOrThrow()
+
+                // Track analytics
+                tourAnalytics.startTourSession(
+                    tourId,
+                    uiStateSnapshot.value.tourTitle,
+                    true // isDemo = true
+                )
+
+                Timber.d("✅ Demo: Tour simulation started successfully")
+                LiveTourPartialState.LocationTrackingStarted
+            } else {
+                LiveTourPartialState.Error("No tour stops available for demo")
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "❌ Demo: Failed to start demo tour")
+            LiveTourPartialState.Error("Failed to start demo: ${e.message}")
+        }
     }
 
     override fun mapIntents(intent: LiveTourIntent): Flow<LiveTourPartialState> = flow {
         when (intent) {
+            LiveTourIntent.Start -> {
+                emit(LiveTourPartialState.Loading)
+                // Add a small delay for better UX, then start demo
+                delay(1000L)
+                emit(handleDemoStart())
+            }
+
             LiveTourIntent.StartLocationTracking -> {
                 try {
                     if (!locationManager.hasLocationPermission()) {
@@ -193,6 +245,7 @@ class LiveTourViewModel @Inject constructor(
 
             LiveTourPartialState.LocationTrackingStarted -> previousState.copy(
                 isLocationEnabled = true,
+                isLoading = false,
                 tourStatus = TourStatus.ACTIVE
             )
 
@@ -669,6 +722,7 @@ sealed interface LiveTourPartialState {
 
 // Intents
 sealed interface LiveTourIntent {
+    data object Start : LiveTourIntent
     data object StartLocationTracking : LiveTourIntent
     data object ResumeTour : LiveTourIntent
     data object CompleteTour : LiveTourIntent

@@ -53,9 +53,14 @@ class FirebaseTourRepositoryImpl @Inject constructor(
                     return@addSnapshotListener
                 }
 
+                val currentTime = System.currentTimeMillis()
                 val tours = snapshot?.documents?.mapNotNull { doc ->
                     doc.toObject<FirestoreTour>()?.copy(id = doc.id)?.let { firestoreTour ->
-                        TourMapper.toDomain(firestoreTour)
+                        val startTime = firestoreTour.startTime.toDate().time
+                        val isLiveSoon =
+                            startTime - currentTime in 0..3600000 // 1 hour in milliseconds
+
+                        TourMapper.toDomain(firestoreTour.copy(isLive = isLiveSoon))
                     }
                 } ?: emptyList()
 
@@ -68,7 +73,7 @@ class FirebaseTourRepositoryImpl @Inject constructor(
     override fun observeToursByAuthor(authorId: String): Flow<List<Tour>> = callbackFlow {
         val listener = firestore.collection(TOURS_COLLECTION)
             .whereEqualTo("authorId", authorId)
-            //  .orderBy("createdAt", Query.Direction.DESCENDING)
+          //  .orderBy("createdAt", Query.Direction.DESCENDING)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
                     Timber.e(error, "Error observing tours by author")
@@ -639,7 +644,6 @@ class FirebaseTourRepositoryImpl @Inject constructor(
             throw Exception("Unauthorized to complete tour for another user")
         }
 
-        // Mark tour as completed (this could be per-user or global depending on requirements)
         val updateData = mapOf(
             "isCompleted" to true,
             "completedAt" to com.google.firebase.Timestamp.now(),

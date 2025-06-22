@@ -41,98 +41,70 @@ class GeofencingManager @Inject constructor(
         )
     }
 
-    suspend fun addGeofencesForTour(tourStops: List<TourStopGeofence>): Result<Unit> {
-        if (!hasLocationPermission()) {
-            Timber.e("🚫 Location permission not granted for geofencing")
-            return Result.failure(SecurityException("Location permission not granted"))
-        }
+    suspend fun addGeofencesForTour(tourStops: List<TourStopGeofence>): Result<Unit> =
+        suspendCancellableCoroutine { continuation ->
+            if (!hasLocationPermission()) {
+                Timber.e("🚫 Location permission not granted for geofencing")
+                continuation.resume(Result.failure(SecurityException("Location permission not granted")))
+                return@suspendCancellableCoroutine
+            }
 
-        if (tourStops.isEmpty()) {
-            Timber.w("⚠️ No tour stops provided for geofencing")
-            return Result.failure(IllegalArgumentException("No tour stops provided"))
-        }
+            if (tourStops.isEmpty()) {
+                Timber.w("⚠️ No tour stops provided for geofencing")
+                continuation.resume(Result.success(Unit))
+                return@suspendCancellableCoroutine
+            }
 
-        val geofences = tourStops.map { stop ->
-            Timber.d("🎯 Creating geofence for stop: ${stop.id} at (${stop.latitude}, ${stop.longitude}) radius: ${stop.radius}m")
+            val geofences = tourStops.map { stop ->
+                Geofence.Builder()
+                    .setRequestId(stop.id)
+                    .setCircularRegion(stop.latitude, stop.longitude, stop.radius)
+                    .setExpirationDuration(Geofence.NEVER_EXPIRE)
+                    .setTransitionTypes(
+                        Geofence.GEOFENCE_TRANSITION_ENTER or
+                                Geofence.GEOFENCE_TRANSITION_EXIT
+                    )
+                    .build()
+            }
 
-            Geofence.Builder()
-                .setRequestId(stop.id)
-                .setCircularRegion(stop.latitude, stop.longitude, stop.radius)
-                .setExpirationDuration(Geofence.NEVER_EXPIRE)
-                .setTransitionTypes(
-                    Geofence.GEOFENCE_TRANSITION_ENTER or
-                            Geofence.GEOFENCE_TRANSITION_EXIT
-                )
+            val geofencingRequest = GeofencingRequest.Builder()
+                .setInitialTrigger(GeofencingRequest.INITIAL_TRIGGER_ENTER)
+                .addGeofences(geofences)
                 .build()
-        }
 
-        val geofencingRequest = GeofencingRequest.Builder()
-            .setInitialTrigger(GeofencingRequest.INITIAL_TRIGGER_ENTER)
-            .addGeofences(geofences)
-            .build()
-
-        return try {
-            suspendCancellableCoroutine { continuation ->
+            try {
                 geofencingClient.addGeofences(geofencingRequest, geofencePendingIntent)
                     .addOnSuccessListener {
-                        Timber.d("✅ Successfully added ${geofences.size} geofences")
+                        Timber.d("✅ Geofences added successfully for ${geofences.size} stops")
                         continuation.resume(Result.success(Unit))
                     }
                     .addOnFailureListener { exception ->
                         Timber.e(exception, "❌ Failed to add geofences")
                         continuation.resume(Result.failure(exception))
                     }
+            } catch (e: SecurityException) {
+                Timber.e(e, "🚫 Security exception adding geofences")
+                continuation.resume(Result.failure(e))
             }
-        } catch (e: SecurityException) {
-            Timber.e(e, "🚫 Security exception when adding geofences")
-            Result.failure(e)
-        } catch (e: Exception) {
-            Timber.e(e, "💥 Unexpected error when adding geofences")
-            Result.failure(e)
         }
-    }
 
-    // FIXED: Make this function suspend as well
-    suspend fun removeGeofences(geofenceIds: List<String>): Result<Unit> {
-        return try {
-            suspendCancellableCoroutine { continuation ->
-                geofencingClient.removeGeofences(geofenceIds)
+    suspend fun removeAllGeofences(): Result<Unit> =
+        suspendCancellableCoroutine { continuation ->
+            try {
+                geofencingClient.removeGeofences(geofencePendingIntent)
                     .addOnSuccessListener {
-                        Timber.d("✅ Successfully removed ${geofenceIds.size} geofences")
+                        Timber.d("✅ All geofences removed successfully")
                         continuation.resume(Result.success(Unit))
                     }
                     .addOnFailureListener { exception ->
                         Timber.e(exception, "❌ Failed to remove geofences")
                         continuation.resume(Result.failure(exception))
                     }
+            } catch (e: Exception) {
+                Timber.e(e, "❌ Exception removing geofences")
+                continuation.resume(Result.failure(e))
             }
-        } catch (e: Exception) {
-            Result.failure(e)
         }
-    }
-
-    // FIXED: Make this function suspend as well
-    suspend fun removeAllGeofences(): Result<Unit> {
-        return try {
-            suspendCancellableCoroutine { continuation ->
-                geofencingClient.removeGeofences(geofencePendingIntent)
-                    .addOnSuccessListener {
-                        Timber.d("✅ Successfully removed all geofences")
-                        continuation.resume(Result.success(Unit))
-                    }
-                    .addOnFailureListener { exception ->
-                        Timber.e(exception, "❌ Failed to remove all geofences")
-                        continuation.resume(Result.failure(exception))
-                    }
-            }
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
-
-    suspend fun handleGeofenceEvent(event: GeofenceEvent) {
-        _geofenceEvents.emit(event)
-    }
 
     private fun hasLocationPermission(): Boolean {
         return ActivityCompat.checkSelfPermission(
@@ -140,22 +112,27 @@ class GeofencingManager @Inject constructor(
             Manifest.permission.ACCESS_FINE_LOCATION
         ) == PackageManager.PERMISSION_GRANTED
     }
+
+    // Method to emit geofence events (called from BroadcastReceiver)
+    fun onGeofenceEvent(event: GeofenceEvent) {
+        _geofenceEvents.tryEmit(event)
+    }
 }
 
-data class TourStopGeofence(
-    val id: String,
-    val latitude: Double,
-    val longitude: Double,
-    val radius: Float = 50f // Default 50 meters
-)
+//data class TourStopGeofence(
+//    val id: String,
+//    val latitude: Double,
+//    val longitude: Double,
+//    val radius: Float = 50f // Default 50 meters
+//)
 
-sealed class GeofenceEvent {
-    data class Enter(val geofenceId: String, val location: Location?) :
-        GeofenceEvent()
-
-    data class Exit(val geofenceId: String, val location: Location?) :
-        GeofenceEvent()
-}
+//sealed class GeofenceEvent {
+//    data class Enter(val geofenceId: String) :
+//        GeofenceEvent()
+//
+//    data class Exit(val geofenceId: String, val location: Location?) :
+//        GeofenceEvent()
+//}
 
 // Extension functions for easier use
 fun List<LiveTourStop>.toGeofences(): List<TourStopGeofence> {

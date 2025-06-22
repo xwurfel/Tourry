@@ -21,57 +21,36 @@ class GeofenceBroadcastReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         val geofencingEvent = GeofencingEvent.fromIntent(intent)
-
-        if (geofencingEvent == null) {
-            Timber.Forest.tag(TAG).e("Geofencing event is null")
+        if (geofencingEvent?.hasError() == true) {
+            Timber.e("❌ Geofencing error: ${geofencingEvent.errorCode}")
             return
         }
 
-        if (geofencingEvent.hasError()) {
-            Timber.Forest.tag(TAG).e("Geofencing error: ${geofencingEvent.errorCode}")
-            return
-        }
+        val geofenceTransition = geofencingEvent?.geofenceTransition
+        val triggeringGeofences = geofencingEvent?.triggeringGeofences
 
-        val geofenceTransition = geofencingEvent.geofenceTransition
-        val triggeringGeofences = geofencingEvent.triggeringGeofences ?: return
-        val location = geofencingEvent.triggeringLocation
-
-        CoroutineScope(SupervisorJob()).launch {
-            when (geofenceTransition) {
-                Geofence.GEOFENCE_TRANSITION_ENTER -> {
-                    handleGeofenceEnter(triggeringGeofences, location)
-                }
-
-                Geofence.GEOFENCE_TRANSITION_EXIT -> {
-                    handleGeofenceExit(triggeringGeofences, location)
-                }
-
-                else -> {
-                    Timber.Forest.tag(TAG).w("Unexpected geofence transition: $geofenceTransition")
+        when (geofenceTransition) {
+            Geofence.GEOFENCE_TRANSITION_ENTER -> {
+                triggeringGeofences?.forEach { geofence ->
+                    Timber.d("🎯 Geofence ENTER: ${geofence.requestId}")
+                    geofencingManager.onGeofenceEvent(
+                        GeofenceEvent.Enter(geofence.requestId)
+                    )
                 }
             }
-        }
-    }
 
-    private suspend fun handleGeofenceEnter(geofences: List<Geofence>, location: Location?) {
-        geofences.forEach { geofence ->
-            Timber.Forest.tag(TAG).d("Entered geofence: ${geofence.requestId}")
-            geofencingManager.handleGeofenceEvent(
-                GeofenceEvent.Enter(geofence.requestId, location)
-            )
-        }
-    }
+            Geofence.GEOFENCE_TRANSITION_EXIT -> {
+                triggeringGeofences?.forEach { geofence ->
+                    Timber.d("🚪 Geofence EXIT: ${geofence.requestId}")
+                    geofencingManager.onGeofenceEvent(
+                        GeofenceEvent.Exit(geofence.requestId)
+                    )
+                }
+            }
 
-    private suspend fun handleGeofenceExit(geofences: List<Geofence>, location: Location?) {
-        geofences.forEach { geofence ->
-            Timber.Forest.tag(TAG).d("Exited geofence: ${geofence.requestId}")
-            geofencingManager.handleGeofenceEvent(
-                GeofenceEvent.Exit(geofence.requestId, location)
-            )
+            else -> {
+                Timber.w("⚠️ Unknown geofence transition: $geofenceTransition")
+            }
         }
-    }
-
-    companion object {
-        private const val TAG = "GeofenceReceiver"
     }
 }

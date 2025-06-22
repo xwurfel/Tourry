@@ -110,6 +110,10 @@ fun LiveTourRoute(
         uiState = uiState,
         onIntent = viewModel::acceptIntent,
     )
+
+    LaunchedEffect(Unit) {
+        viewModel.acceptIntent(LiveTourIntent.Start)
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

@@ -18,6 +18,7 @@ import com.xwurfel.tourry.ui.splash.SplashViewModel
 import com.xwurfel.tourry.ui.theme.TourryTheme
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
@@ -36,9 +37,23 @@ class MainActivity : ComponentActivity() {
 
     private val splashViewModel: SplashViewModel by viewModels()
 
+    private fun initializeMockData() {
+        lifecycleScope.launch {
+            val mockDataManager = FirebaseMockDataManager()
+
+            //mockDataManager.clearFirebaseDatabase()
+            //mockDataManager.loadMockTourData()
+            try {
+            } catch (e: Exception) {
+                ensureActive()
+            }
+        }
+    }
+
     @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen = installSplashScreen()
+        initializeMockData()
 
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
