@@ -42,7 +42,7 @@ class MainActivity : ComponentActivity() {
             val mockDataManager = FirebaseMockDataManager()
 
             //mockDataManager.clearFirebaseDatabase()
-            //mockDataManager.loadMockTourData()
+            mockDataManager.loadMockTourData()
             try {
             } catch (e: Exception) {
                 ensureActive()

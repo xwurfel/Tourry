@@ -189,12 +189,12 @@ fun LiveTourScreen(
             }
 
             // Debug overlay (only in debug builds)
-            if (showDebugInfo) {
-                DebugInfoOverlay(
-                    uiState = uiState,
-                    modifier = Modifier.align(Alignment.TopCenter)
-                )
-            }
+//            if (showDebugInfo) {
+//                DebugInfoOverlay(
+//                    uiState = uiState,
+//                    modifier = Modifier.align(Alignment.TopCenter)
+//                )
+//            }
 
             // Overlays
             TourProgressOverlay(
@@ -210,41 +210,41 @@ fun LiveTourScreen(
             )
 
             // Debug: Show a test content card to verify rendering works
-            if (showDebugInfo && uiState.tourStops.isNotEmpty()) {
-                val testStop = uiState.tourStops.first()
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.CenterEnd)
-                        .padding(16.dp)
-                ) {
-                    Card(
-                        colors = CardDefaults.cardColors(
-                            containerColor = Color.Red.copy(alpha = 0.8f),
-                            contentColor = Color.White
-                        )
-                    ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
-                            Text(
-                                "DEBUG TEST CARD",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                "If you see this, UI rendering works",
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                            Text(
-                                "First stop: ${testStop.name}",
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                            Text(
-                                "Has content: ${testStop.content != null}",
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                        }
-                    }
-                }
-            }
+//            if (showDebugInfo && uiState.tourStops.isNotEmpty()) {
+//                val testStop = uiState.tourStops.first()
+//                Box(
+//                    modifier = Modifier
+//                        .align(Alignment.CenterEnd)
+//                        .padding(16.dp)
+//                ) {
+//                    Card(
+//                        colors = CardDefaults.cardColors(
+//                            containerColor = Color.Red.copy(alpha = 0.8f),
+//                            contentColor = Color.White
+//                        )
+//                    ) {
+//                        Column(modifier = Modifier.padding(12.dp)) {
+//                            Text(
+//                                "DEBUG TEST CARD",
+//                                style = MaterialTheme.typography.labelSmall,
+//                                fontWeight = FontWeight.Bold
+//                            )
+//                            Text(
+//                                "If you see this, UI rendering works",
+//                                style = MaterialTheme.typography.bodySmall
+//                            )
+//                            Text(
+//                                "First stop: ${testStop.name}",
+//                                style = MaterialTheme.typography.bodySmall
+//                            )
+//                            Text(
+//                                "Has content: ${testStop.content != null}",
+//                                style = MaterialTheme.typography.bodySmall
+//                            )
+//                        }
+//                    }
+//                }
+//            }
 
             // Debug: Manual geofence trigger for testing
             if (showDebugInfo && uiState.tourStops.isNotEmpty() && uiState.tourStatus == TourStatus.ACTIVE) {
@@ -1140,101 +1140,101 @@ private fun LiveTourPreview() {
     }
 }
 
-@Composable
-fun DebugInfoOverlay(
-    uiState: LiveTourUiState,
-    modifier: Modifier = Modifier
-) {
-    Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(8.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = Color.Black.copy(alpha = 0.8f),
-            contentColor = Color.White
-        )
-    ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            Text(
-                "DEBUG INFO",
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.Bold,
-                color = Color.Yellow
-            )
-
-            Text("Tour ID: ${uiState.tourTitle}", style = MaterialTheme.typography.bodySmall)
-            Text("Tour Status: ${uiState.tourStatus}", style = MaterialTheme.typography.bodySmall)
-            Text(
-                "Location Enabled: ${uiState.isLocationEnabled}",
-                style = MaterialTheme.typography.bodySmall
-            )
-            Text(
-                "Stops Count: ${uiState.tourStops.size}",
-                style = MaterialTheme.typography.bodySmall
-            )
-            Text(
-                "Visited Count: ${uiState.visitedStopsCount}",
-                style = MaterialTheme.typography.bodySmall
-            )
-            Text(
-                "Current Stop: ${uiState.currentStop?.name ?: "None"}",
-                style = MaterialTheme.typography.bodySmall
-            )
-            Text(
-                "Is Active: ${uiState.currentStop?.isActive ?: false}",
-                style = MaterialTheme.typography.bodySmall
-            )
-            Text(
-                "Has Content: ${uiState.currentStop?.content != null}",
-                style = MaterialTheme.typography.bodySmall
-            )
-            Text(
-                "Content Text: ${uiState.currentStop?.content?.text?.take(50) ?: "None"}...",
-                style = MaterialTheme.typography.bodySmall
-            )
-            Text(
-                "Progress: ${(uiState.progress * 100).toInt()}%",
-                style = MaterialTheme.typography.bodySmall
-            )
-            Text("Can Complete: ${uiState.canComplete}", style = MaterialTheme.typography.bodySmall)
-
-            if (uiState.userLocation != null) {
-                Text(
-                    "Location: ${uiState.userLocation.latitude.format(4)}, ${
-                        uiState.userLocation.longitude.format(
-                            4
-                        )
-                    }",
-                    style = MaterialTheme.typography.bodySmall
-                )
-            } else {
-                Text(
-                    "Location: Not available",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color.Red
-                )
-            }
-
-            // Show distance to stops
-            if (uiState.userLocation != null && uiState.tourStops.isNotEmpty()) {
-                uiState.tourStops.take(3).forEach { stop ->
-                    val distance = calculateDistance(
-                        uiState.userLocation.latitude, uiState.userLocation.longitude,
-                        stop.latitude, stop.longitude
-                    )
-                    Text(
-                        "Distance to ${stop.name}: ${distance.toInt()}m (radius: ${stop.geofenceRadius}m)",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (distance <= stop.geofenceRadius) Color.Green else Color.White
-                    )
-                }
-            }
-        }
-    }
-}
+//@Composable
+//fun DebugInfoOverlay(
+//    uiState: LiveTourUiState,
+//    modifier: Modifier = Modifier
+//) {
+//    Card(
+//        modifier = modifier
+//            .fillMaxWidth()
+//            .padding(8.dp),
+//        colors = CardDefaults.cardColors(
+//            containerColor = Color.Black.copy(alpha = 0.8f),
+//            contentColor = Color.White
+//        )
+//    ) {
+//        Column(
+//            modifier = Modifier.padding(12.dp),
+//            verticalArrangement = Arrangement.spacedBy(4.dp)
+//        ) {
+//            Text(
+//                "DEBUG INFO",
+//                style = MaterialTheme.typography.labelSmall,
+//                fontWeight = FontWeight.Bold,
+//                color = Color.Yellow
+//            )
+//
+//            Text("Tour ID: ${uiState.tourTitle}", style = MaterialTheme.typography.bodySmall)
+//            Text("Tour Status: ${uiState.tourStatus}", style = MaterialTheme.typography.bodySmall)
+//            Text(
+//                "Location Enabled: ${uiState.isLocationEnabled}",
+//                style = MaterialTheme.typography.bodySmall
+//            )
+//            Text(
+//                "Stops Count: ${uiState.tourStops.size}",
+//                style = MaterialTheme.typography.bodySmall
+//            )
+//            Text(
+//                "Visited Count: ${uiState.visitedStopsCount}",
+//                style = MaterialTheme.typography.bodySmall
+//            )
+//            Text(
+//                "Current Stop: ${uiState.currentStop?.name ?: "None"}",
+//                style = MaterialTheme.typography.bodySmall
+//            )
+//            Text(
+//                "Is Active: ${uiState.currentStop?.isActive ?: false}",
+//                style = MaterialTheme.typography.bodySmall
+//            )
+//            Text(
+//                "Has Content: ${uiState.currentStop?.content != null}",
+//                style = MaterialTheme.typography.bodySmall
+//            )
+//            Text(
+//                "Content Text: ${uiState.currentStop?.content?.text?.take(50) ?: "None"}...",
+//                style = MaterialTheme.typography.bodySmall
+//            )
+//            Text(
+//                "Progress: ${(uiState.progress * 100).toInt()}%",
+//                style = MaterialTheme.typography.bodySmall
+//            )
+//            Text("Can Complete: ${uiState.canComplete}", style = MaterialTheme.typography.bodySmall)
+//
+//            if (uiState.userLocation != null) {
+//                Text(
+//                    "Location: ${uiState.userLocation.latitude.format(4)}, ${
+//                        uiState.userLocation.longitude.format(
+//                            4
+//                        )
+//                    }",
+//                    style = MaterialTheme.typography.bodySmall
+//                )
+//            } else {
+//                Text(
+//                    "Location: Not available",
+//                    style = MaterialTheme.typography.bodySmall,
+//                    color = Color.Red
+//                )
+//            }
+//
+//            // Show distance to stops
+//            if (uiState.userLocation != null && uiState.tourStops.isNotEmpty()) {
+//                uiState.tourStops.take(3).forEach { stop ->
+//                    val distance = calculateDistance(
+//                        uiState.userLocation.latitude, uiState.userLocation.longitude,
+//                        stop.latitude, stop.longitude
+//                    )
+//                    Text(
+//                        "Distance to ${stop.name}: ${distance.toInt()}m (radius: ${stop.geofenceRadius}m)",
+//                        style = MaterialTheme.typography.bodySmall,
+//                        color = if (distance <= stop.geofenceRadius) Color.Green else Color.White
+//                    )
+//                }
+//            }
+//        }
+//    }
+//}
 
 // Helper function for distance calculation
 private fun calculateDistance(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
